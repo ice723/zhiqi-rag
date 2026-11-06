@@ -1,0 +1,698 @@
+{
+  "summary": {
+    "线上链路(实体过滤)": {
+      "命中率@5": {
+        "C1_基线混合检索": 100,
+        "C2_加HyDE_RRF": 100,
+        "C3_加CrossEncoder重排": 100
+      },
+      "延迟中位数ms": {
+        "基线检索(embedding+混合检索)": 284,
+        "HyDE增路(LLM生成+检索+RRF)": 11073,
+        "CrossEncoder重排": 148
+      },
+      "分题型(基线vs重排)": {
+        "直问": {
+          "基线": 100,
+          "重排": 100
+        },
+        "改写": {
+          "基线": 100,
+          "重排": 100
+        }
+      }
+    },
+    "全库压力(无过滤)": {
+      "命中率@5": {
+        "C1_基线混合检索": 100,
+        "C2_加HyDE_RRF": 94,
+        "C3_加CrossEncoder重排": 81
+      },
+      "延迟中位数ms": {
+        "基线检索(embedding+混合检索)": 279,
+        "HyDE增路(LLM生成+检索+RRF)": 10935,
+        "CrossEncoder重排": 151
+      },
+      "分题型(基线vs重排)": {
+        "直问": {
+          "基线": 100,
+          "重排": 75
+        },
+        "改写": {
+          "基线": 100,
+          "重排": 88
+        }
+      }
+    },
+    "实体对齐评测": {
+      "库内主体数": 12,
+      "库内自动确认率": 100.0,
+      "库外实体数": 8,
+      "库外正确拒答率": 25.0,
+      "库外最高分": 0.775,
+      "库内最低分": 0.911
+    }
+  },
+  "mode_a_detail": [
+    {
+      "id": "Z1",
+      "type": "直问",
+      "item_name": "奔图P3500黑白激光打印机",
+      "query": "打印机控制面板布局和按键功能是什么",
+      "expected_keywords": [
+        "控制面板",
+        "布局"
+      ],
+      "note": "1.4 控制面板章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 1.0,
+      "t_base_ms": 13161,
+      "t_hyde_ms": 11976,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 319
+    },
+    {
+      "id": "Z2",
+      "type": "直问",
+      "item_name": "联想海豚Dolphin彩色喷墨打印机",
+      "query": "打印机怎么装入纸张",
+      "expected_keywords": [
+        "装入纸张",
+        "进纸托盘"
+      ],
+      "note": "首次安装章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.975,
+      "t_base_ms": 305,
+      "t_hyde_ms": 10881,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 148
+    },
+    {
+      "id": "Z3",
+      "type": "直问",
+      "item_name": "兄弟HAK180烫金机",
+      "query": "搬运设备时有什么注意事项",
+      "expected_keywords": [
+        "双手",
+        "两侧"
+      ],
+      "note": "安全位置章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9652,
+      "t_base_ms": 280,
+      "t_hyde_ms": 13216,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 172
+    },
+    {
+      "id": "Z4",
+      "type": "直问",
+      "item_name": "华为显示器B3-211H",
+      "query": "显示器支持的最大分辨率是多少",
+      "expected_keywords": [
+        "1920",
+        "1080"
+      ],
+      "note": "显示模式章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8893,
+      "t_base_ms": 360,
+      "t_hyde_ms": 10927,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 167
+    },
+    {
+      "id": "Z5",
+      "type": "直问",
+      "item_name": "H3CLA2608室内无线网关",
+      "query": "如何验证网关与无线控制器是否连通",
+      "expected_keywords": [
+        "无线控制器",
+        "连通"
+      ],
+      "note": "1.2.3 验证章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8768,
+      "t_base_ms": 282,
+      "t_hyde_ms": 11922,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 143
+    },
+    {
+      "id": "Z6",
+      "type": "直问",
+      "item_name": "华为MateStationS12代酷睿版",
+      "query": "设备在什么环境条件下使用",
+      "expected_keywords": [
+        "多灰",
+        "磁场"
+      ],
+      "note": "操作环境章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9901,
+      "t_base_ms": 281,
+      "t_hyde_ms": 14949,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 143
+    },
+    {
+      "id": "Z7",
+      "type": "直问",
+      "item_name": "华为擎云B530台式机",
+      "query": "电池安全方面有什么注意事项",
+      "expected_keywords": [
+        "电池",
+        "起火"
+      ],
+      "note": "电池安全章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9994,
+      "t_base_ms": 320,
+      "t_hyde_ms": 11035,
+      "t_rrf_ms": 1,
+      "t_rerank_ms": 148
+    },
+    {
+      "id": "Z8",
+      "type": "直问",
+      "item_name": "HUAWEIMateBookB7-420",
+      "query": "怎么把电脑连接到投影仪",
+      "expected_keywords": [
+        "投影仪",
+        "显示器"
+      ],
+      "note": "大屏连接章节",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9741,
+      "t_base_ms": 284,
+      "t_hyde_ms": 12845,
+      "t_rrf_ms": 1,
+      "t_rerank_ms": 149
+    },
+    {
+      "id": "G1",
+      "type": "改写",
+      "item_name": "联想海豚Dolphin彩色喷墨打印机",
+      "query": "这机器咋装墨水啊",
+      "expected_keywords": [
+        "墨水瓶",
+        "封口膜"
+      ],
+      "note": "口语指代，模拟多轮改写后query",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8878,
+      "t_base_ms": 426,
+      "t_hyde_ms": 12473,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 172
+    },
+    {
+      "id": "G2",
+      "type": "改写",
+      "item_name": "奔图P3500黑白激光打印机",
+      "query": "碳粉盒能用多久啊",
+      "expected_keywords": [
+        "碳粉盒",
+        "使用寿命"
+      ],
+      "note": "口语化问法",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9322,
+      "t_base_ms": 242,
+      "t_hyde_ms": 15260,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 162
+    },
+    {
+      "id": "G3",
+      "type": "改写",
+      "item_name": "华为显示器B3-211H",
+      "query": "屏幕点不亮了咋整",
+      "expected_keywords": [
+        "无法开机",
+        "电源线"
+      ],
+      "note": "故障口语描述",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.6578,
+      "t_base_ms": 285,
+      "t_hyde_ms": 10778,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 141
+    },
+    {
+      "id": "G4",
+      "type": "改写",
+      "item_name": "华为擎云M272Q显示器",
+      "query": "看久了对眼睛好的那个模式咋开",
+      "expected_keywords": [
+        "护眼模式",
+        "色温"
+      ],
+      "note": "功能口语描述",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9631,
+      "t_base_ms": 99,
+      "t_hyde_ms": 11110,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 144
+    },
+    {
+      "id": "G5",
+      "type": "改写",
+      "item_name": "HUAWEIMateBookB7-420",
+      "query": "鼠标没电了怎么换电池",
+      "expected_keywords": [
+        "电池",
+        "AA"
+      ],
+      "note": "指代消解场景",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9082,
+      "t_base_ms": 93,
+      "t_hyde_ms": 10475,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 350
+    },
+    {
+      "id": "G6",
+      "type": "改写",
+      "item_name": "兄弟HAK180烫金机",
+      "query": "这玩意儿用的是多少伏的电",
+      "expected_keywords": [
+        "220",
+        "电源"
+      ],
+      "note": "口语问电压",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.763,
+      "t_base_ms": 281,
+      "t_hyde_ms": 10352,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 158
+    },
+    {
+      "id": "G7",
+      "type": "改写",
+      "item_name": "华为擎云W525台式计算机",
+      "query": "怎么把无线网关掉啊在BIOS里",
+      "expected_keywords": [
+        "BIOS",
+        "无线网卡"
+      ],
+      "note": "口语+专业词混合",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8822,
+      "t_base_ms": 287,
+      "t_hyde_ms": 10869,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 140
+    },
+    {
+      "id": "G8",
+      "type": "改写",
+      "item_name": "华为擎云W585台式计算机",
+      "query": "开机要密码那个在哪设置",
+      "expected_keywords": [
+        "BIOS",
+        "密码"
+      ],
+      "note": "功能口语描述",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8925,
+      "t_base_ms": 383,
+      "t_hyde_ms": 8368,
+      "t_rrf_ms": 3,
+      "t_rerank_ms": 147
+    }
+  ],
+  "mode_b_detail": [
+    {
+      "id": "Z1",
+      "type": "直问",
+      "query": "打印机控制面板布局和按键功能是什么",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 1.0,
+      "t_base_ms": 411,
+      "t_hyde_ms": 13263,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 281
+    },
+    {
+      "id": "Z2",
+      "type": "直问",
+      "query": "打印机怎么装入纸张",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9958,
+      "t_base_ms": 287,
+      "t_hyde_ms": 12649,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 165
+    },
+    {
+      "id": "Z3",
+      "type": "直问",
+      "query": "搬运设备时有什么注意事项",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9652,
+      "t_base_ms": 295,
+      "t_hyde_ms": 10324,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 121
+    },
+    {
+      "id": "Z4",
+      "type": "直问",
+      "query": "显示器支持的最大分辨率是多少",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8893,
+      "t_base_ms": 355,
+      "t_hyde_ms": 10961,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 167
+    },
+    {
+      "id": "Z5",
+      "type": "直问",
+      "query": "如何验证网关与无线控制器是否连通",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8768,
+      "t_base_ms": 130,
+      "t_hyde_ms": 10961,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 117
+    },
+    {
+      "id": "Z6",
+      "type": "直问",
+      "query": "设备在什么环境条件下使用",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": false,
+      "rerank_top1_score": 0.9976,
+      "t_base_ms": 290,
+      "t_hyde_ms": 10847,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 160
+    },
+    {
+      "id": "Z7",
+      "type": "直问",
+      "query": "电池安全方面有什么注意事项",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": false,
+      "rerank_top1_score": 0.9994,
+      "t_base_ms": 263,
+      "t_hyde_ms": 13986,
+      "t_rrf_ms": 1,
+      "t_rerank_ms": 232
+    },
+    {
+      "id": "Z8",
+      "type": "直问",
+      "query": "怎么把电脑连接到投影仪",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9741,
+      "t_base_ms": 279,
+      "t_hyde_ms": 13683,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 155
+    },
+    {
+      "id": "G1",
+      "type": "改写",
+      "query": "这机器咋装墨水啊",
+      "base_hit": true,
+      "hyde_hit": false,
+      "rerank_hit": false,
+      "rerank_top1_score": 0.8878,
+      "t_base_ms": 289,
+      "t_hyde_ms": 12603,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 145
+    },
+    {
+      "id": "G2",
+      "type": "改写",
+      "query": "碳粉盒能用多久啊",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9322,
+      "t_base_ms": 268,
+      "t_hyde_ms": 10910,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 174
+    },
+    {
+      "id": "G3",
+      "type": "改写",
+      "query": "屏幕点不亮了咋整",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.6578,
+      "t_base_ms": 279,
+      "t_hyde_ms": 10530,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 170
+    },
+    {
+      "id": "G4",
+      "type": "改写",
+      "query": "看久了对眼睛好的那个模式咋开",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9631,
+      "t_base_ms": 233,
+      "t_hyde_ms": 10824,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 134
+    },
+    {
+      "id": "G5",
+      "type": "改写",
+      "query": "鼠标没电了怎么换电池",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.9082,
+      "t_base_ms": 255,
+      "t_hyde_ms": 10605,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 145
+    },
+    {
+      "id": "G6",
+      "type": "改写",
+      "query": "这玩意儿用的是多少伏的电",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.763,
+      "t_base_ms": 238,
+      "t_hyde_ms": 12431,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 133
+    },
+    {
+      "id": "G7",
+      "type": "改写",
+      "query": "怎么把无线网关掉啊在BIOS里",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8822,
+      "t_base_ms": 243,
+      "t_hyde_ms": 9929,
+      "t_rrf_ms": 1,
+      "t_rerank_ms": 141
+    },
+    {
+      "id": "G8",
+      "type": "改写",
+      "query": "开机要密码那个在哪设置",
+      "base_hit": true,
+      "hyde_hit": true,
+      "rerank_hit": true,
+      "rerank_top1_score": 0.8925,
+      "t_base_ms": 296,
+      "t_hyde_ms": 9474,
+      "t_rrf_ms": 0,
+      "t_rerank_ms": 147
+    }
+  ],
+  "entity_detail": {
+    "in_kb": [
+      {
+        "name": "奔图P3500黑白激光打印机",
+        "top1": 0.9149,
+        "hit": "奔图P3500黑白激光打印机",
+        "auto_confirm": true
+      },
+      {
+        "name": "联想海豚Dolphin彩色喷墨打印机",
+        "top1": 0.9189,
+        "hit": "联想海豚Dolphin彩色喷墨打印机",
+        "auto_confirm": true
+      },
+      {
+        "name": "兄弟HAK180烫金机",
+        "top1": 0.9152,
+        "hit": "兄弟HAK180烫金机",
+        "auto_confirm": true
+      },
+      {
+        "name": "H3CLA2608室内无线网关",
+        "top1": 0.9157,
+        "hit": "H3CLA2608室内无线网关",
+        "auto_confirm": true
+      },
+      {
+        "name": "HUAWEIMateBookB7-420",
+        "top1": 0.9199,
+        "hit": "HUAWEIMateBookB7-420",
+        "auto_confirm": true
+      },
+      {
+        "name": "华为MateStationS12代酷睿版",
+        "top1": 0.9145,
+        "hit": "华为MateStationS12代酷睿版",
+        "auto_confirm": true
+      },
+      {
+        "name": "华为擎云M272Q显示器",
+        "top1": 0.9166,
+        "hit": "华为擎云M272Q显示器",
+        "auto_confirm": true
+      },
+      {
+        "name": "华为擎云W525台式计算机",
+        "top1": 0.9227,
+        "hit": "华为擎云W525台式计算机",
+        "auto_confirm": true
+      },
+      {
+        "name": "华为擎云B530台式机",
+        "top1": 0.9185,
+        "hit": "华为擎云B530台式机",
+        "auto_confirm": true
+      },
+      {
+        "name": "华为擎云W585台式计算机",
+        "top1": 0.9224,
+        "hit": "华为擎云W585台式计算机",
+        "auto_confirm": true
+      },
+      {
+        "name": "华为显示器B3-211H",
+        "top1": 0.9106,
+        "hit": "华为显示器B3-211H",
+        "auto_confirm": true
+      },
+      {
+        "name": "AolynkCB304nCable网桥",
+        "top1": 0.9196,
+        "hit": "AolynkCB304nCable网桥",
+        "auto_confirm": true
+      }
+    ],
+    "oov": [
+      {
+        "name": "爱普生L3153打印机",
+        "top1": 0.7751,
+        "hit": "奔图P3500黑白激光打印机",
+        "reject": false
+      },
+      {
+        "name": "小米电视",
+        "top1": 0.664,
+        "hit": "华为擎云B530台式机",
+        "reject": false
+      },
+      {
+        "name": "TP-Link路由器",
+        "top1": 0.5944,
+        "hit": "H3CLA2608室内无线网关",
+        "reject": true
+      },
+      {
+        "name": "戴尔Latitude笔记本",
+        "top1": 0.7003,
+        "hit": "华为擎云W525台式计算机",
+        "reject": false
+      },
+      {
+        "name": "佳能相机",
+        "top1": 0.6638,
+        "hit": "华为MateStationS12代酷睿版",
+        "reject": false
+      },
+      {
+        "name": "格力空调",
+        "top1": 0.6453,
+        "hit": "华为擎云B530台式机",
+        "reject": false
+      },
+      {
+        "name": "iPhone 15",
+        "top1": 0.5818,
+        "hit": "华为擎云B530台式机",
+        "reject": true
+      },
+      {
+        "name": "希捷移动硬盘",
+        "top1": 0.6564,
+        "hit": "华为擎云W585台式计算机",
+        "reject": false
+      }
+    ]
+  }
+}

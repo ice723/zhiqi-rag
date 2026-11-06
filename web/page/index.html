@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>知器 · 知识库问答</title>
+  <meta name="description" content="知器：面向私有资料的知识库问答系统，支持文档导入、混合检索与 RAG 问答。" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231aa7ff'/%3E%3Ctext x='32' y='45' font-size='36' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'%3E%E7%9F%A5%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root{
+      --bg:#f3f5f7;
+      --panel:#ffffff;
+      --text:#1f2d3d;
+      --muted:#7a869a;
+      --brand:#1aa7ff;
+      --brand2:#5b7cfa;
+      --bubble-user:#1aa7ff;
+      --bubble-bot:#ffffff;
+      --border:#e6e9ef;
+      --shadow:0 10px 30px rgba(31,45,61,.12);
+      --ok:#18b26b;
+      --warn:#f0a020;
+      --danger:#e5484d;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(26,167,255,.18), transparent 60%),
+                  radial-gradient(1000px 500px at 90% 10%, rgba(91,124,250,.18), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:18px;
+    }
+    .app{
+      width:100%;
+      max-width:1180px;
+      height:min(860px, 94vh);
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    }
+    .topbar{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:14px 18px;
+      border-bottom:1px solid var(--border);
+      background:linear-gradient(90deg, rgba(26,167,255,.10), rgba(91,124,250,.10));
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:240px;
+    }
+    .logo{
+      width:36px;height:36px;border-radius:10px;
+      display:flex;align-items:center;justify-content:center;
+      color:#fff;font-size:19px;font-weight:700;line-height:1;
+      background:linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow:0 8px 18px rgba(26,167,255,.25);
+    }
+    .title{
+      display:flex;
+      flex-direction:column;
+      line-height:1.1;
+    }
+    .title strong{font-size:14px}
+    .title span{font-size:12px;color:var(--muted);margin-top:3px}
+    .top-actions{
+      margin-left:auto;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .pill{
+      font-size:12px;
+      color:var(--muted);
+      border:1px solid var(--border);
+      padding:6px 10px;
+      border-radius:999px;
+      background:#fff;
+    }
+    .btn{
+      border:none;
+      background:linear-gradient(135deg, var(--brand), var(--brand2));
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      font-size:12px;
+      cursor:pointer;
+    }
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .btn.ghost{
+      background:#fff;
+      color:#3b4a5a;
+      border:1px solid var(--border);
+    }
+    .btn.ghost:hover{border-color:rgba(26,167,255,.55); color:var(--brand)}
+
+    .chat{
+      flex:1;
+      overflow:auto;
+      padding:16px 14px 10px;
+      background:linear-gradient(180deg, rgba(26,167,255,.05), transparent 40%),
+                 linear-gradient(0deg, rgba(91,124,250,.05), transparent 45%);
+    }
+    .dayline{
+      text-align:center;
+      color:var(--muted);
+      font-size:12px;
+      margin:6px 0 14px;
+    }
+    .msg{
+      display:flex;
+      gap:10px;
+      margin:10px 0;
+      align-items:flex-end;
+    }
+    .msg.user{justify-content:flex-end}
+    .msg > div:not(.avatar){
+      flex:1;
+      min-width:0;
+    }
+    .msg.user > div:not(.avatar){
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+    }
+    .avatar{
+      width:34px;height:34px;border-radius:10px;
+      background:#e9eef7;
+      display:flex;align-items:center;justify-content:center;
+      font-size:14px;
+      color:#3b4a5a;
+      flex:0 0 auto;
+    }
+    .avatar.bot{background:linear-gradient(135deg, rgba(26,167,255,.18), rgba(91,124,250,.18))}
+    .bubble{
+      max-width:min(820px, 82%);
+      display:inline-block;
+      border-radius:14px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      background:var(--bubble-bot);
+      position:relative;
+      line-height:1.55;
+      font-size:14px;
+      white-space:pre-wrap;
+      overflow-wrap: break-word;
+    }
+    .msg.user .bubble{
+      background:var(--bubble-user);
+      color:#fff;
+      border-color:transparent;
+    }
+    .meta{
+      font-size:11px;
+      color:var(--muted);
+      margin-top:6px;
+    }
+    .msg.user .meta{color:rgba(255,255,255,.85)}
+    details.progress{
+      margin-top:8px;
+      border:1px dashed rgba(122,134,154,.45);
+      border-radius:12px;
+      padding:8px 10px;
+      background:rgba(122,134,154,.06);
+    }
+    details.progress summary{
+      cursor:pointer;
+      user-select:none;
+      color:var(--muted);
+      font-size:12px;
+    }
+    .progress ul{margin:8px 0 0 18px;padding:0}
+    .progress li{margin:4px 0;font-size:12px;color:#56657a}
+
+    .answer-images{
+      margin-top:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .answer-images img{
+      display: block;
+      max-width: min(100%, 600px);
+      max-height: 600px;
+      width: auto;
+      height: auto;
+      border-radius:12px;
+      border:1px solid var(--border);
+      box-shadow:0 10px 24px rgba(31,45,61,.10);
+      background:#fff;
+    }
+    .answer-images a{
+      font-size:12px;
+      color:var(--muted);
+      text-decoration:none;
+      word-break:break-all;
+    }
+
+    .typing{
+      display:inline-flex;gap:6px;align-items:center;
+    }
+    .dot{
+      width:7px;height:7px;border-radius:50%;
+      background:#9aa6b2;
+      animation:bounce 1.2s infinite ease-in-out;
+    }
+    .dot:nth-child(2){animation-delay:.15s}
+    .dot:nth-child(3){animation-delay:.3s}
+    @keyframes bounce{
+      0%,80%,100%{transform:translateY(0);opacity:.6}
+      40%{transform:translateY(-5px);opacity:1}
+    }
+
+    .composer{
+      border-top:1px solid var(--border);
+      padding:12px 14px;
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+      background:#fff;
+    }
+    textarea{
+      flex:1;
+      resize:none;
+      min-height:44px;
+      max-height:140px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      outline:none;
+      font-size:14px;
+      line-height:1.5;
+      font-family:inherit;
+    }
+    textarea:focus{border-color:rgba(26,167,255,.6); box-shadow:0 0 0 3px rgba(26,167,255,.12)}
+    .send{
+      width:88px;
+      height:44px;
+      border:none;
+      border-radius:12px;
+      cursor:pointer;
+      font-size:14px;
+      color:#fff;
+      background:linear-gradient(135deg, var(--brand), var(--brand2));
+    }
+    .send:disabled{opacity:.6;cursor:not-allowed}
+    .hint{
+      padding:0 14px 12px;
+      color:var(--muted);
+      font-size:12px;
+      background:#fff;
+    }
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      border:1px solid var(--border);
+      padding:1px 6px;
+      border-radius:6px;
+      background:#f7f9fc;
+      color:#3b4a5a;
+    }
+
+    /* ---------- 资料导入抽屉 ---------- */
+    .backdrop{
+      position:fixed;inset:0;background:rgba(31,45,61,.35);
+      opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:40;
+    }
+    .backdrop.show{opacity:1;pointer-events:auto}
+    .drawer{
+      position:fixed;top:0;right:0;height:100%;width:min(430px, 100%);
+      background:var(--panel);border-left:1px solid var(--border);
+      box-shadow:-16px 0 40px rgba(31,45,61,.18);
+      transform:translateX(105%);transition:transform .25s ease;z-index:50;
+      display:flex;flex-direction:column;
+    }
+    .drawer.open{transform:translateX(0)}
+    .drawer-head{
+      display:flex;align-items:center;gap:10px;
+      padding:16px 18px;border-bottom:1px solid var(--border);
+      background:linear-gradient(90deg, rgba(26,167,255,.10), rgba(91,124,250,.10));
+    }
+    .drawer-head strong{font-size:14px}
+    .drawer-head span{font-size:12px;color:var(--muted)}
+    .icon-btn{
+      margin-left:auto;border:none;background:transparent;cursor:pointer;
+      font-size:20px;line-height:1;color:var(--muted);padding:4px 6px;border-radius:8px;
+    }
+    .icon-btn:hover{background:rgba(31,45,61,.06);color:var(--text)}
+    .drawer-body{
+      flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:14px;
+    }
+    .dropzone{
+      border:1.5px dashed rgba(26,167,255,.55);
+      border-radius:14px;
+      padding:22px 16px;
+      text-align:center;
+      background:rgba(26,167,255,.045);
+      cursor:pointer;
+      transition:background .15s ease, border-color .15s ease;
+    }
+    .dropzone:hover,.dropzone.drag{background:rgba(26,167,255,.10);border-color:var(--brand)}
+    .dropzone .dz-title{font-size:13px;color:var(--text);margin-bottom:6px}
+    .dropzone .dz-sub{font-size:12px;color:var(--muted)}
+    .dropzone .dz-icon{
+      width:38px;height:38px;border-radius:12px;margin:0 auto 10px;
+      background:linear-gradient(135deg, var(--brand), var(--brand2));
+      opacity:.9;
+    }
+    .file-list{display:flex;flex-direction:column;gap:10px}
+    .file-card{
+      border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:#fff;
+    }
+    .file-top{display:flex;align-items:center;gap:8px}
+    .file-name{
+      font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;
+    }
+    .file-size{font-size:11px;color:var(--muted);flex:0 0 auto}
+    .bar{
+      height:6px;border-radius:999px;background:#eef1f6;margin-top:9px;overflow:hidden;
+    }
+    .bar > i{
+      display:block;height:100%;width:0%;
+      background:linear-gradient(90deg, var(--brand), var(--brand2));
+      transition:width .35s ease;
+    }
+    .file-status{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.5;word-break:break-word}
+    .file-status.ok{color:var(--ok)}
+    .file-status.err{color:var(--danger)}
+    .drawer-foot{
+      padding:12px 16px 16px;border-top:1px solid var(--border);background:#fff;
+      display:flex;gap:10px;align-items:center;
+    }
+    .drawer-foot .tip{font-size:11px;color:var(--muted);flex:1;line-height:1.5}
+    .drawer-foot .btn{white-space:nowrap}
+
+    @media (max-width: 720px){
+      body{padding:0;height:100dvh}
+      .app{height:100dvh;border-radius:0;border:none}
+      .brand{min-width:0}
+      .title span{display:none}
+      .bubble{max-width:88%}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">知</div>
+        <div class="title">
+          <strong>知器</strong>
+          <span id="subTitle">私有资料 · 混合检索 · 在线问答</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;color:var(--muted);">
+          <input type="checkbox" id="streamToggle" checked> 流式输出
+        </label>
+        <span class="pill" id="apiPill">API: 检测中…</span>
+        <button class="btn ghost" id="btnImport">导入资料</button>
+        <button class="btn" id="btnClear">清空对话</button>
+      </div>
+    </div>
+
+    <div class="chat" id="chat">
+      <div class="dayline">今天</div>
+      <div class="msg bot">
+        <div class="avatar bot" title="知器">知</div>
+        <div>
+          <div class="bubble">你好，我是知器，可以基于你导入的资料回答问题。先点右上角「导入资料」上传 PDF / Markdown，导入完成后就能直接提问。</div>
+          <div class="meta">提示：可以问“如何使用万用表测量电压？”</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <textarea id="input" placeholder="请输入问题（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button class="send" id="send">发送</button>
+    </div>
+    <div class="hint">快捷键：<span class="kbd">Enter</span> 发送，<span class="kbd">Shift</span>+<span class="kbd">Enter</span> 换行</div>
+  </div>
+
+  <!-- 资料导入抽屉 -->
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <strong>导入资料</strong><br />
+        <span>支持 PDF / Markdown，可多选</span>
+      </div>
+      <button class="icon-btn" id="btnCloseDrawer" title="关闭">×</button>
+    </div>
+    <div class="drawer-body">
+      <div class="dropzone" id="dropzone">
+        <div class="dz-icon"></div>
+        <div class="dz-title">点击选择文件，或把文件拖到这里</div>
+        <div class="dz-sub">PDF 会先经 MinerU 解析，耗时取决于文件大小</div>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,.md" multiple hidden />
+      <div class="file-list" id="fileList"></div>
+      <!-- 上传/解析进度单独一个容器：排队列表会被 renderSelectedFiles 反复清空，混在一起会把进度卡片一起清掉 -->
+      <div class="file-list" id="uploadList"></div>
+    </div>
+    <div class="drawer-foot">
+      <div class="tip">流程：上传 → 解析 → 切片 → 实体识别 → 向量化 → 入库</div>
+      <button class="btn" id="btnUpload" disabled>开始导入</button>
+    </div>
+  </aside>
+
+  <script>
+    const API_BASE = (location.protocol === 'http:' || location.protocol === 'https:')
+      ? location.origin
+      : 'http://127.0.0.1:8000';
+
+    const chatEl = document.getElementById('chat');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const apiPill = document.getElementById('apiPill');
+    const btnClear = document.getElementById('btnClear');
+    const streamToggle = document.getElementById('streamToggle');
+
+    // ---------------- Session ----------------
+    let sessionId = localStorage.getItem('kb_session_id');
+    if (!sessionId) {
+      sessionId = 'sess-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('kb_session_id', sessionId);
+    }
+
+    function scrollToBottom(){
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+    function nowTime(){
+      return new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+    }
+    function formatTime(ts){
+      if(!ts) return nowTime();
+      const d = new Date(Number(ts) * 1000);
+      if(Number.isNaN(d.getTime())) return nowTime();
+      return d.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+    }
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'",'&#039;');
+    }
+
+    function isImageUrl(url){
+      try {
+        const u = new URL(url, location.href);
+        return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(u.pathname);
+      } catch (e) {
+        return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(url || '');
+      }
+    }
+    function normalizeUrl(rawUrl){
+      const s = String(rawUrl || '').trim();
+      if(!s) return '';
+      return s.replace(/\s/g, '%20');
+    }
+    function dedupeKeepOrder(arr){
+      const seen = new Set();
+      const out = [];
+      for(const x of (Array.isArray(arr) ? arr : [])){
+        const v = String(x || '');
+        if(!v || seen.has(v)) continue;
+        seen.add(v);
+        out.push(v);
+      }
+      return out;
+    }
+    function extractUrlsLoose(text){
+      const matches = String(text || '').match(/(https?:\/\/[^\s]+)/g) || [];
+      const trimTailPunct = (u) => String(u || '').replace(/[)\]}'">，。,;；\]】）＞]+$/g, '');
+      const trimHeadPunct = (u) => String(u || '').replace(/^[<([{'"]+|^[＜（【\[]+/g, '');
+      return dedupeKeepOrder(matches.map(m => trimHeadPunct(trimTailPunct(m))).filter(Boolean));
+    }
+    function findLastImageMarkerIndex(raw){
+      const s = String(raw || '');
+      const re = /【\s*图片\s*】|\[\s*图片\s*\]/g;
+      let m, lastIdx = -1, lastLen = 0;
+      while((m = re.exec(s)) !== null){ lastIdx = m.index; lastLen = m[0].length; }
+      return { idx: lastIdx, len: lastLen };
+    }
+    function parseAnswerAndImages(text){
+      const raw = String(text || '');
+      const { idx, len } = findLastImageMarkerIndex(raw);
+      if(idx === -1) return { text: raw, images: [] };
+      const before = raw.slice(0, idx).trimEnd();
+      const after = raw.slice(idx + len).trim();
+      const urls = [];
+      for(const line of after.split(/\r?\n/).map(l => l.trim()).filter(Boolean)){
+        if(line.startsWith('http://') || line.startsWith('https://')) urls.push(line);
+        else extractUrlsLoose(line).forEach(u => urls.push(u));
+      }
+      const images = [];
+      const seen = new Set();
+      for(const u of urls){
+        const normalized = normalizeUrl(u);
+        if(!isImageUrl(normalized) || seen.has(normalized)) continue;
+        seen.add(normalized);
+        images.push(normalized);
+      }
+      return { text: before, images };
+    }
+    function renderAnswerWithImages(containerEl, answerText, candidateImageUrls){
+      const { text, images: imagesFromBlock } = parseAnswerAndImages(answerText);
+      const candidates = Array.isArray(candidateImageUrls)
+        ? candidateImageUrls.map(normalizeUrl).filter(isImageUrl) : [];
+      const looseImages = extractUrlsLoose(answerText).map(normalizeUrl).filter(isImageUrl);
+      const allImages = Array.from(new Set([
+        ...(imagesFromBlock || []),
+        ...candidates,
+        ...looseImages
+      ]));
+
+      containerEl.textContent = '';
+      const textEl = document.createElement('div');
+      textEl.className = 'answer-text';
+      textEl.textContent = (text || '').trim() ? text : '（已完成，但未返回答案）';
+      containerEl.appendChild(textEl);
+
+      if(allImages.length > 0){
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'answer-images';
+        for(const url of allImages){
+          const safeUrl = normalizeUrl(url);
+          const img = document.createElement('img');
+          img.loading = 'lazy';
+          img.src = safeUrl;
+          img.alt = '参考图片';
+          img.referrerPolicy = 'no-referrer';
+          img.addEventListener('error', () => { img.style.display = 'none'; });
+          imgWrap.appendChild(img);
+
+          const link = document.createElement('a');
+          link.href = safeUrl;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = url;
+          imgWrap.appendChild(link);
+        }
+        containerEl.appendChild(imgWrap);
+      }
+    }
+
+    function addUserMsgWithTime(text, ts){
+      chatEl.insertAdjacentHTML('beforeend', `
+        <div class="msg user">
+          <div>
+            <div class="bubble">${escapeHtml(text)}</div>
+            <div class="meta">${formatTime(ts)}</div>
+          </div>
+          <div class="avatar">我</div>
+        </div>
+      `);
+      scrollToBottom();
+    }
+    function addBotMsgWithTime(text, ts, imageUrls){
+      const id = 'bot-his-' + Math.random().toString(36).slice(2);
+      chatEl.insertAdjacentHTML('beforeend', `
+        <div class="msg bot" id="${id}">
+          <div class="avatar bot" title="知器">知</div>
+          <div>
+            <div class="bubble"><div class="answer"></div></div>
+            <div class="meta">${formatTime(ts)}</div>
+          </div>
+        </div>
+      `);
+      const el = document.getElementById(id);
+      if(el) renderAnswerWithImages(el.querySelector('.answer'), text || '', imageUrls || []);
+      scrollToBottom();
+    }
+    function addBotMsgSkeleton(){
+      const id = 'bot-' + Math.random().toString(36).slice(2);
+      chatEl.insertAdjacentHTML('beforeend', `
+        <div class="msg bot" id="${id}">
+          <div class="avatar bot" title="知器">知</div>
+          <div style="min-width: 180px;">
+            <div class="bubble">
+              <span class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+              <details class="progress" open>
+                <summary>阶段进度（等待中）</summary>
+                <ul></ul>
+              </details>
+            </div>
+            <div class="meta">${nowTime()}</div>
+          </div>
+        </div>
+      `);
+      scrollToBottom();
+      return document.getElementById(id);
+    }
+    // 图节点 id → 中文步骤名（未收录的原样显示，避免新增节点时出现空白）
+    const NODE_LABELS = {
+      node_item_name_confirm: '识别提问主体',
+      node_search_embedding: '知识库向量检索',
+      node_web_search_mcp: '联网搜索资料',
+      node_search_embedding_hyde: 'HyDE 补全检索',
+      node_rrf: '多路检索结果融合',
+      node_rerank: '检索结果重排',
+      node_answer_output: '生成回答'
+    };
+    function nodeLabel(id){
+      if(!id) return '';
+      return NODE_LABELS[id] || id;
+    }
+    function renderProgress(botMsgEl, doneList, runningList, status){
+      const details = botMsgEl.querySelector('details.progress');
+      if(!details) return;
+      const summary = details.querySelector('summary');
+      const ul = details.querySelector('ul');
+      const done = Array.isArray(doneList) ? doneList : [];
+      const running = Array.isArray(runningList) ? runningList : [];
+      const statusMap = { processing:'处理中', completed:'已完成', failed:'失败', pending:'等待中' };
+      summary.textContent = `阶段进度（已完成${done.length}，进行中${running.length}，状态：${statusMap[status] || status || '未知'}）`;
+
+      const lines = [...done.map(x => `✅ ${nodeLabel(x)}`), ...running.map(x => `⏳ ${nodeLabel(x)}`)];
+      ul.innerHTML = '';
+      if(lines.length === 0) ul.insertAdjacentHTML('beforeend', '<li>暂无进度</li>');
+      else lines.forEach(line => ul.insertAdjacentHTML('beforeend', `<li>${escapeHtml(line)}</li>`));
+    }
+    // 气泡是 white-space:pre-wrap，模板里的缩进空白会渲染成空行；
+    // 流式渲染时只插入 answer 节点，得手动清掉这些纯空白文本节点
+    function stripEmptyTextNodes(el){
+      if(!el) return;
+      [...el.childNodes].forEach(node => {
+        if(node.nodeType === 3 && !node.textContent.trim()) el.removeChild(node);
+      });
+    }
+    function finalizeBotAnswer(botMsgEl, answer, error, imageUrls){
+      const bubble = botMsgEl.querySelector('.bubble');
+      const progress = botMsgEl.querySelector('details.progress');
+      const err = (error || '').trim();
+
+      if(progress) progress.removeAttribute('open');
+
+      if(err){
+        bubble.textContent = '';
+        const errEl = document.createElement('div');
+        errEl.className = 'answer';
+        errEl.textContent = `抱歉，本次处理失败：\n${err}`;
+        bubble.appendChild(errEl);
+        return;
+      }
+
+      bubble.textContent = '';
+      const answerEl = document.createElement('div');
+      answerEl.className = 'answer';
+      bubble.appendChild(answerEl);
+      renderAnswerWithImages(answerEl, answer || '', imageUrls || []);
+    }
+
+    async function apiHealth(){
+      try{
+        const res = await fetch(`${API_BASE}/health`);
+        if(!res.ok) throw new Error('health not ok');
+        apiPill.textContent = 'API: 已连接';
+      }catch(e){
+        apiPill.textContent = 'API: 未连接';
+      }
+    }
+
+    async function loadHistory(){
+      try{
+        const res = await fetch(`${API_BASE}/history/${sessionId}`);
+        if(!res.ok) return;
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        if(items.length === 0) return;
+        const nodes = Array.from(chatEl.querySelectorAll('.msg'));
+        for(let i=1;i<nodes.length;i++) nodes[i].remove();
+        for(const item of items){
+          if(item.role === 'user') addUserMsgWithTime(item.text || '', item.ts);
+          else addBotMsgWithTime(item.text || '', item.ts, item.image_urls || []);
+        }
+        scrollToBottom();
+      }catch(_){}
+    }
+
+    async function submitQuery(text){
+      const res = await fetch(`${API_BASE}/query`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ query: text, session_id: sessionId, is_stream: streamToggle.checked })
+      });
+      if(!res.ok){
+        throw new Error((await res.text()) || '请求失败');
+      }
+      return await res.json();
+    }
+
+    async function onSend(){
+      const text = (inputEl.value || '').trim();
+      if(!text) return;
+      inputEl.value = '';
+      addUserMsgWithTime(text, null);
+      const botMsgEl = addBotMsgSkeleton();
+      sendBtn.disabled = true;
+
+      try{
+        const isStream = streamToggle.checked;
+        const data = await submitQuery(text);
+        renderProgress(botMsgEl, [], [], 'pending');
+
+        if(!isStream){
+          renderProgress(botMsgEl, data.done_list || [], [], data.error ? 'failed' : 'completed');
+          finalizeBotAnswer(botMsgEl, data.answer, data.error, data.image_urls || []);
+          sendBtn.disabled = false;
+          return;
+        }
+
+        const bubble = botMsgEl.querySelector('.bubble');
+        let answerEl = bubble.querySelector('.answer');
+        if(!answerEl){
+          answerEl = document.createElement('div');
+          answerEl.className = 'answer';
+          bubble.insertBefore(answerEl, bubble.firstChild);
+        }
+
+        const es = new EventSource(`${API_BASE}/stream/${data.session_id}`);
+        let rawAnswerText = '';
+        // 记住最近一次进度，final 事件里没有 done_list，用它把状态补成「已完成」
+        let lastDoneList = [], lastRunningList = [];
+
+        es.addEventListener('progress', (e) => {
+          try{
+            const d = JSON.parse(e.data || '{}');
+            lastDoneList = Array.isArray(d.done_list) ? d.done_list : [];
+            lastRunningList = Array.isArray(d.running_list) ? d.running_list : [];
+            renderProgress(botMsgEl, d.done_list, d.running_list, d.status);
+            if(d && d.status === 'completed') sendBtn.disabled = false;
+          }catch(_){}
+        });
+
+        es.addEventListener('delta', (e) => {
+          try{
+            const d = JSON.parse(e.data || '{}');
+            const delta = d.delta || '';
+            if(delta){
+              rawAnswerText += delta;
+              renderAnswerWithImages(answerEl, rawAnswerText, []);
+              scrollToBottom();
+            }
+          }catch(_){}
+        });
+
+        es.addEventListener('final', (e) => {
+          const typing = botMsgEl.querySelector('.typing');
+          if(typing) typing.remove();
+          const progress = botMsgEl.querySelector('details.progress');
+          if(progress) progress.removeAttribute('open');
+          try{
+            const d = JSON.parse(e.data || '{}');
+            const finalText = (d && typeof d.answer === 'string' && d.answer.trim().length > 0)
+              ? d.answer : (rawAnswerText || answerEl.textContent || '');
+            renderAnswerWithImages(answerEl, finalText, d.image_urls || []);
+            // 收尾：把进度面板状态标成已完成，避免一直显示「处理中」
+            if(progress) renderProgress(botMsgEl, lastDoneList, [], (d && d.status) || 'completed');
+            stripEmptyTextNodes(bubble);
+          }catch(_){}
+          es.close();
+          sendBtn.disabled = false;
+        });
+
+        es.addEventListener('error', (e) => {
+          const typing = botMsgEl.querySelector('.typing');
+          if(typing) typing.remove();
+          const progress = botMsgEl.querySelector('details.progress');
+          if(progress) progress.removeAttribute('open');
+          try{
+            const msg = e && e.data ? (JSON.parse(e.data).error || 'SSE 连接中断/失败') : 'SSE 连接中断/失败';
+            rawAnswerText += `\n\n（错误：${msg}）`;
+            renderAnswerWithImages(answerEl, rawAnswerText, []);
+          }catch(_){
+            rawAnswerText += '\n\n（错误：SSE 连接中断/失败）';
+            renderAnswerWithImages(answerEl, rawAnswerText, []);
+          }
+          stripEmptyTextNodes(bubble);
+          es.close();
+          sendBtn.disabled = false;
+        });
+      }catch(e){
+        const progress = botMsgEl.querySelector('details.progress');
+        const typing = botMsgEl.querySelector('.typing');
+        if(typing) typing.remove();
+        botMsgEl.querySelector('.bubble').innerHTML =
+          `请求失败：${escapeHtml(e.message || e)}` + (progress ? progress.outerHTML : '');
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', onSend);
+    inputEl.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        onSend();
+      }
+    });
+    btnClear.addEventListener('click', async () => {
+      if(!confirm('确定要清空当前会话的历史记录吗？这将无法恢复。')) return;
+      try {
+        const res = await fetch(`${API_BASE}/history/${sessionId}`, { method: 'DELETE' });
+        if(!res.ok) alert('服务端清空失败，仅清空本地显示');
+      } catch(e) {
+        alert('服务端清空失败，仅清空本地显示');
+      }
+      const nodes = Array.from(chatEl.querySelectorAll('.msg'));
+      for(let i=1;i<nodes.length;i++) nodes[i].remove();
+      scrollToBottom();
+    });
+
+    // ---------------- 资料导入 ----------------
+    const drawer = document.getElementById('drawer');
+    const backdrop = document.getElementById('backdrop');
+    const btnImport = document.getElementById('btnImport');
+    const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileListEl = document.getElementById('fileList');
+    const uploadListEl = document.getElementById('uploadList');
+    const btnUpload = document.getElementById('btnUpload');
+
+    let selectedFiles = [];
+    let uploading = false;
+
+    function openDrawer(){
+      drawer.classList.add('open');
+      backdrop.classList.add('show');
+      drawer.setAttribute('aria-hidden', 'false');
+    }
+    function closeDrawer(){
+      if(uploading) return; // 导入过程中不关闭，避免用户误以为任务中断
+      drawer.classList.remove('open');
+      backdrop.classList.remove('show');
+      drawer.setAttribute('aria-hidden', 'true');
+    }
+    btnImport.addEventListener('click', openDrawer);
+    btnCloseDrawer.addEventListener('click', closeDrawer);
+    backdrop.addEventListener('click', closeDrawer);
+
+    function humanSize(bytes){
+      if(bytes < 1024) return bytes + ' B';
+      if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+      return (bytes/1024/1024).toFixed(1) + ' MB';
+    }
+    function addFiles(fileList){
+      if(uploading) return; // 上传进行中不接受新排队，避免列表状态混乱
+      const accepted = [];
+      for(const f of Array.from(fileList || [])){
+        if(!/\.(pdf|md)$/i.test(f.name)) continue;
+        if(selectedFiles.some(x => x.name === f.name && x.size === f.size)) continue;
+        accepted.push(f);
+      }
+      selectedFiles = selectedFiles.concat(accepted);
+      renderSelectedFiles();
+    }
+    function renderSelectedFiles(){
+      fileListEl.innerHTML = '';
+      selectedFiles.forEach((file, index) => {
+        const card = document.createElement('div');
+        card.className = 'file-card';
+        card.innerHTML = `
+          <div class="file-top">
+            <div class="file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
+            <div class="file-size">${humanSize(file.size)}</div>
+            <button class="icon-btn" data-index="${index}" title="移除">×</button>
+          </div>
+          <div class="bar"><i></i></div>
+          <div class="file-status">待上传</div>
+        `;
+        fileListEl.appendChild(card);
+      });
+      btnUpload.disabled = selectedFiles.length === 0 || uploading;
+    }
+    fileListEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-index]');
+      if(!btn || uploading) return;
+      selectedFiles.splice(Number(btn.dataset.index), 1);
+      renderSelectedFiles();
+    });
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      addFiles(fileInput.files);
+      fileInput.value = '';
+    });
+    ['dragenter','dragover'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+    });
+    ['dragleave','drop'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('drag'); });
+    });
+    dropzone.addEventListener('drop', (e) => {
+      if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+
+    const TOTAL_IMPORT_STEPS = 8;
+
+    function setCardStatus(card, text, cls){
+      const el = card.querySelector('.file-status');
+      el.className = 'file-status' + (cls ? ' ' + cls : '');
+      el.textContent = text;
+    }
+    function setCardProgress(card, percent){
+      const bar = card.querySelector('.bar > i');
+      if(bar) bar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+    }
+
+    function pollTask(taskId, card){
+      const started = Date.now();
+      const timer = setInterval(async () => {
+        if(Date.now() - started > 30 * 60 * 1000){
+          clearInterval(timer);
+          setCardStatus(card, '轮询超时，请稍后重试', 'err');
+          return;
+        }
+        try{
+          const res = await fetch(`${API_BASE}/status/${taskId}`);
+          if(!res.ok) return;
+          const data = await res.json();
+          const done = (data.done_list || []).length;
+          const running = data.running_list || [];
+
+          if(data.status === 'completed'){
+            setCardProgress(card, 100);
+            setCardStatus(card, '已完成，可以开始提问', 'ok');
+            clearInterval(timer);
+          }else if(data.status === 'failed'){
+            setCardStatus(card, '失败：' + (data.error || '未知错误'), 'err');
+            clearInterval(timer);
+          }else{
+            setCardProgress(card, Math.min(95, Math.round(done / TOTAL_IMPORT_STEPS * 100)));
+            const runningText = running.length ? running.map(nodeLabel).join('、') : '排队/解析中';
+            setCardStatus(card, `已完成 ${done} 步，当前：${runningText}`);
+          }
+        }catch(_){ /* 网络抖动继续轮询 */ }
+      }, 1200);
+    }
+
+    btnUpload.addEventListener('click', async () => {
+      if(uploading || selectedFiles.length === 0) return;
+      uploading = true;
+      btnUpload.disabled = true;
+      btnCloseDrawer.disabled = true;
+
+      const filesToUpload = selectedFiles.slice();
+      selectedFiles = [];
+      renderSelectedFiles();
+      uploadListEl.innerHTML = '';
+
+      const cards = [];
+      for(const file of filesToUpload){
+        const card = document.createElement('div');
+        card.className = 'file-card';
+        card.innerHTML = `
+          <div class="file-top">
+            <div class="file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
+            <div class="file-size">${humanSize(file.size)}</div>
+          </div>
+          <div class="bar"><i></i></div>
+          <div class="file-status">上传中…</div>
+        `;
+        uploadListEl.appendChild(card);
+        cards.push(card);
+      }
+
+      const form = new FormData();
+      filesToUpload.forEach(f => form.append('files', f));
+
+      try{
+        const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: form });
+        if(!res.ok) throw new Error((await res.text()) || '上传失败');
+        const data = await res.json();
+        const taskIds = data.task_ids || [];
+        cards.forEach((card, i) => {
+          if(taskIds[i]){
+            setCardProgress(card, 5);
+            setCardStatus(card, '已接收，等待解析…');
+            pollTask(taskIds[i], card);
+          }else{
+            setCardStatus(card, '服务端未返回任务号', 'err');
+          }
+        });
+      }catch(e){
+        cards.forEach(card => setCardStatus(card, '上传失败：' + (e.message || e), 'err'));
+      }finally{
+        uploading = false;
+        btnUpload.disabled = selectedFiles.length === 0;
+        btnCloseDrawer.disabled = false;
+        renderSelectedFiles();
+      }
+    });
+
+    console.log('加载当前会话的历史聊天记忆');
+    loadHistory();
+    apiHealth();
+    setTimeout(() => inputEl.focus(), 200);
+  </script>
+</body>
+</html>

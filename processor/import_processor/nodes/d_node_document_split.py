@@ -1,0 +1,280 @@
+# processor/import_processor/nodes/node_document_split.py
+import json
+import re
+from pathlib import Path
+from typing import Dict, List
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from processor.import_processor.base import BaseNode
+from processor.import_processor.import_config import get_config
+from processor.import_processor.exceptions import StateFieldError
+from processor.import_processor.state import ImportGraphState
+
+
+class NodeDocumentSplit(BaseNode):
+    """
+    文档切分节点：智能文档切片
+    """
+
+    name = "node_document_split"
+
+
+    def process(self, state: ImportGraphState):
+        # 1.参数处理
+        content, file_title = self._step_1_get_input(state)
+
+        # 2.标题初切
+        sections, title_count, lines_count = self._step_2_split_by_title(content, file_title)
+
+        # 3.无标题兜底
+        sections = self._step_3_handle_no_title(content, sections, title_count, file_title)
+
+        # 4.块精细化处理（长切短合）
+        sections = self._step_4_refine_chunks(sections)
+        # for section in sections:
+        #     print(f"{section['title']}")
+        #     print(f"{section['content']}")
+        #     print("======================================================")
+        # print(f"标题的数量是：{title_count}")
+        # print(f"行数：{lines_count}")
+
+        #5. 打印日志
+        self._step_5_print_stats(lines_count,sections)
+
+        # 6.备份
+        self._step_6_backup(state, sections)
+        state["chunks"] = sections
+        return state
+
+    # 步骤1：参数化处理
+    def _step_1_get_input(self,state):
+        print("node_document_split: 步骤1：参数处理")
+        content = state.get("md_content")
+        if not content:
+            raise StateFieldError(field_name="md_content", expected_type=str)
+
+        file_title = state.get("file_title")
+        if not file_title:
+            raise StateFieldError(field_name="file_title", expected_type=str)
+
+        #换行符处理
+        content = content.replace("\r\n","\n").replace("\r","\n")
+
+        return content, file_title
+
+    # 步骤2：标题初切
+    def _step_2_split_by_title(self,content, file_title):
+        print("node_document_split: 步骤2：标题初切")
+
+        #参数声明
+        lines = content.split("\n")
+        sections: List[Dict[str,str]] = [] # 初始化一个空列表，用于存储每个部分的标题和内容
+        current_title = ""
+        title_count = 0
+        current_lines = []
+        in_code_block = False
+
+        #切换逻辑
+        title_pattern = r"\s*#{1,6}\s+.+" #标题正则匹配
+
+        #封装独立刷块的逻辑
+        def _flush_section():
+            if not current_lines:
+                return  # 如果当前缓存行是空的（没有任何内容），直接退出函数，不生成空的章节片段
+            #封装section块的案例代码
+            sections.append(
+                {
+                    "title": current_title,
+                    "content": "\n".join(current_lines),
+                    "parent_title": "",
+                    "file_title": file_title
+                }
+            )
+
+        for line in lines:
+            striped_line = line.strip() #去掉字符串开头结尾的空白字符
+
+            #判断是否在代码块中
+            if striped_line.startswith("```") or striped_line.startswith("~~~"):
+                in_code_block = not in_code_block
+                current_lines.append(line)
+                continue
+
+            if (not in_code_block) and (re.match(title_pattern, line)):
+                #如果当前行是标题行，并且不在代码块中,将之前的块内容封装成一个section块
+                _flush_section()
+                current_title = striped_line #换标题
+                #current_lines = []
+                current_lines = [current_title]
+                title_count += 1
+            else:
+                current_lines.append(line) #普通或者代码块
+
+        _flush_section()
+        return sections, title_count, len(lines)
+
+
+    #步骤3：无标题兜底
+    def _step_3_handle_no_title(self,content, sections, title_count, file_title):
+        print("node_document_split: 步骤3：无标题兜底")
+        if title_count == 0:
+            return [{
+                "title": "无标题",
+                "content": content,
+                "parent_title": "无标题",
+                "part": 1,
+                "file_title": file_title,
+            }]
+        return sections
+
+    #步骤4：块精细化处理（长切短合）
+    def _step_4_refine_chunks(self, sections):
+        print("node_document_split: 步骤4：块精细化处理（长切短合）")
+
+        #长切列表
+        refind_split = []
+        for sec in sections:
+            refind_split.extend(self.split_long_section(sec)) #长切操作
+
+        #短切操作
+        final_sections = self.merge_short_section(refind_split) #短合操作
+        for sec in final_sections:
+            if not sec.get("parent_title"):
+                sec["parent_title"] = sec.get("title") or ""
+        return final_sections
+
+    #步骤4方法1长切
+    def split_long_section(self, section:[str, str]):
+        print("node_document_split: 步骤4方法长切")
+        content = section.get("content","")
+        content_len = len(content)
+        #长度合标，直接返回
+        if content_len <= get_config().max_content_length:
+            return [section]
+
+        title = section.get("title") #没有换行符的title
+        prefix = f"{title}\n\n" if title else ""
+        available_len = get_config().max_content_length - len(prefix) #可用长度（每个规定最大长度减去标题长度）
+        # 标题过长时保证 chunk_size 至少为 200，避免切分器参数非法
+        available_len = max(available_len, 200)
+
+        #去重标题
+        body = content
+        if title and body.lstrip().startswith(title):
+            body = body[body.find(title) + len(title):].lstrip()
+
+        #切分器
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=available_len,
+            chunk_overlap=10,  #块之间重叠字符（保留上下文）
+            separators=["\n\n", "\n", "。", "！", "？", "；", ".", "!", "?", ";", " "] #递归切分的分隔符优先级，从高到低
+        )
+
+        #切分结果
+        sub_sections = []
+
+        for index, chunk in enumerate(splitter.split_text(body),start=1):
+            text = chunk.strip()
+            if not text:
+                continue #跳过空内容直接进入下一for循环
+            full_text = (prefix + text).strip()
+
+            sub_sections.append(
+                {
+                    "title": f"{title}-{index}" if title else f"chunk-{index}",
+                    "content": full_text,
+                    "parent_title": title,
+                    "part": index,
+                    "file_title": section.get("file_title")
+                    }
+            )
+        return sub_sections
+
+    #步骤4方法2短合
+    def merge_short_section(self, sections):
+        print("node_document_split: 步骤4方法2短合")
+
+        #小于阈值+合前一个章节同副标题
+        if not sections:
+            self.logger.debug("待合并chunk列表为空，直接返回")
+            return []
+
+        merged_sections = [] #最终合并结果
+        current_chunk = None #迭代累加器，保存当前待合并的chunk
+
+        for sec in sections:
+            #初始化，第一个chunk直接作为待合并块
+            if current_chunk is None:
+                current_chunk = sec
+                continue
+
+            #合并条件：1.当前块长度不足阈值 2.与下一块同父标题（同属一个原章节）
+            is_current_short = len(current_chunk["content"]) <= get_config().min_content_length
+            is_same_parent = current_chunk["parent_title"] == sec.get("parent_title")
+
+            if is_current_short and is_same_parent:
+                #合并前清理：去掉下一块重复的父级标题，避免内容冗余
+                parent_title = sec.get("parent_title","")
+                next_content = sec["content"]
+                if parent_title and next_content.startswith(parent_title):
+                    next_content = next_content[len(parent_title):].lstrip()
+                #合并内容，空行分隔，保证格式整洁
+                current_chunk["content"] += "\n\n" + next_content
+                #更新子chunk序号，保留最新序号，便于溯源
+                if "part" in sec:
+                    current_chunk["part"] = sec["part"]
+                self.logger.debug(
+                    f"合并短chunk：{current_chunk.get('parent_title')}->累计长度{len(current_chunk['content'])}"
+                )
+            else:
+                #不满足合并条件，将当前块加入结果，切换为新的待合并块
+                merged_sections.append(current_chunk)
+                current_chunk = sec
+
+        #循环结束后，将最后一个待合并块加入结果
+        if current_chunk is not None:
+            merged_sections.append(current_chunk)
+
+        self.logger.debug(f"短chunk合并完成：原{len(sections)}个-> 合并后{len(merged_sections)}个")
+        return merged_sections
+
+
+    #步骤5：打印日志
+    def _step_5_print_stats(self, lines_count, sections):
+        print("node_document_split: 步骤5：打印日志")
+        chunk_num = len(sections)
+        #输出核心统计信息，原始行数/最终chunk数/首个chunk预览
+        self.logger.info("-" * 50 + "文档切分统计" + "-" * 50)
+        self.logger.info(f"MD原始文档总行数：{lines_count}")
+        self.logger.info(f"最终生成chunk数量：{chunk_num}")
+
+
+    #步骤6：备份
+    def _step_6_backup(self, state, sections):
+        print("node_document_split: 步骤6：备份")
+
+        #sections切分结果输出文档路径
+        path = Path(state.get("md_path")).parent / f'{state.get("file_title")}_new_chunk.json'
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(
+                sections,
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
+if __name__ == '__main__':
+    node = NodeDocumentSplit()
+    with open("D:\output\PantumP3500用户手册zh_CNV1.2_1644316283788\PantumP3500用户手册zh_CNV1.2_1644316283788_new.md","r",encoding="utf-8") as f:
+        md_content = f.read()
+
+    init_state = {
+        "md_path": "D:\output\PantumP3500用户手册zh_CNV1.2_1644316283788\PantumP3500用户手册zh_CNV1.2_1644316283788.md",
+        "md_content": md_content,
+        "file_title": "PantumP3500用户手册zh"
+    }
+    process = node.process(init_state)
+    print(f"切分节点执行流程{process}")
+
+
+

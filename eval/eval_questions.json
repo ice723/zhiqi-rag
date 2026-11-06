@@ -1,0 +1,30 @@
+{
+  "questions": [
+    {"id": "Z1", "type": "直问", "item_name": "奔图P3500黑白激光打印机", "query": "打印机控制面板布局和按键功能是什么", "expected_keywords": ["控制面板", "布局"], "note": "1.4 控制面板章节"},
+    {"id": "Z2", "type": "直问", "item_name": "联想海豚Dolphin彩色喷墨打印机", "query": "打印机怎么装入纸张", "expected_keywords": ["装入纸张", "进纸托盘"], "note": "首次安装章节"},
+    {"id": "Z3", "type": "直问", "item_name": "兄弟HAK180烫金机", "query": "搬运设备时有什么注意事项", "expected_keywords": ["双手", "两侧"], "note": "安全位置章节"},
+    {"id": "Z4", "type": "直问", "item_name": "华为显示器B3-211H", "query": "显示器支持的最大分辨率是多少", "expected_keywords": ["1920", "1080"], "note": "显示模式章节"},
+    {"id": "Z5", "type": "直问", "item_name": "H3CLA2608室内无线网关", "query": "如何验证网关与无线控制器是否连通", "expected_keywords": ["无线控制器", "连通"], "note": "1.2.3 验证章节"},
+    {"id": "Z6", "type": "直问", "item_name": "华为MateStationS12代酷睿版", "query": "设备在什么环境条件下使用", "expected_keywords": ["多灰", "磁场"], "note": "操作环境章节"},
+    {"id": "Z7", "type": "直问", "item_name": "华为擎云B530台式机", "query": "电池安全方面有什么注意事项", "expected_keywords": ["电池", "起火"], "note": "电池安全章节"},
+    {"id": "Z8", "type": "直问", "item_name": "HUAWEIMateBookB7-420", "query": "怎么把电脑连接到投影仪", "expected_keywords": ["投影仪", "显示器"], "note": "大屏连接章节"},
+    {"id": "G1", "type": "改写", "item_name": "联想海豚Dolphin彩色喷墨打印机", "query": "这机器咋装墨水啊", "expected_keywords": ["墨水瓶", "封口膜"], "note": "口语指代，模拟多轮改写后query"},
+    {"id": "G2", "type": "改写", "item_name": "奔图P3500黑白激光打印机", "query": "碳粉盒能用多久啊", "expected_keywords": ["碳粉盒", "使用寿命"], "note": "口语化问法"},
+    {"id": "G3", "type": "改写", "item_name": "华为显示器B3-211H", "query": "屏幕点不亮了咋整", "expected_keywords": ["无法开机", "电源线"], "note": "故障口语描述"},
+    {"id": "G4", "type": "改写", "item_name": "华为擎云M272Q显示器", "query": "看久了对眼睛好的那个模式咋开", "expected_keywords": ["护眼模式", "色温"], "note": "功能口语描述"},
+    {"id": "G5", "type": "改写", "item_name": "HUAWEIMateBookB7-420", "query": "鼠标没电了怎么换电池", "expected_keywords": ["电池", "AA"], "note": "指代消解场景"},
+    {"id": "G6", "type": "改写", "item_name": "兄弟HAK180烫金机", "query": "这玩意儿用的是多少伏的电", "expected_keywords": ["220", "电源"], "note": "口语问电压"},
+    {"id": "G7", "type": "改写", "item_name": "华为擎云W525台式计算机", "query": "怎么把无线网关掉啊在BIOS里", "expected_keywords": ["BIOS", "无线网卡"], "note": "口语+专业词混合"},
+    {"id": "G8", "type": "改写", "item_name": "华为擎云W585台式计算机", "query": "开机要密码那个在哪设置", "expected_keywords": ["BIOS", "密码"], "note": "功能口语描述"}
+  ],
+  "oov_entities": [
+    "爱普生L3153打印机",
+    "小米电视",
+    "TP-Link路由器",
+    "戴尔Latitude笔记本",
+    "佳能相机",
+    "格力空调",
+    "iPhone 15",
+    "希捷移动硬盘"
+  ]
+}

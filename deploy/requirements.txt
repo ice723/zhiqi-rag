@@ -1,0 +1,31 @@
+# CPU 部署依赖（无 torch / transformers / FlagEmbedding）
+# 安装：pip install -r deploy/requirements.txt
+
+# Web 服务
+fastapi>=0.110,<1
+uvicorn[standard]>=0.30,<1
+python-multipart>=0.0.9
+python-dotenv>=1.0
+
+# RAG 编排
+langchain>=1.0,<2
+langchain-core>=1.0,<2
+langchain-openai>=1.0,<2
+langchain-text-splitters>=1.0,<2
+langgraph>=1.0,<2
+
+# 存储与网络
+minio>=7.2,<8
+pymongo>=4.6,<5
+pymilvus>=2.5,<4
+requests>=2.31
+numpy>=1.26
+
+# 联网搜索（MCP）
+openai-agents>=0.24,<1
+# 必须 <2：mcp 2.x 的 server/discover 探测会被百炼网关返回 500
+mcp>=1.30,<2
+
+# 其他
+colorlog>=6.8
+grandalf>=0.8
