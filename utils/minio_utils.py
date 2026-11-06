@@ -13,6 +13,7 @@ import logging
 import threading
 from typing import Optional
 
+import urllib3
 from minio import Minio
 
 from config.minio_config import minio_config
@@ -21,6 +22,20 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _minio_client: Optional[Minio] = None
+
+# 只读探测用：连接 2s、读取 8s、不重试。
+# urllib3 默认 connect timeout 是 300s，中间件不可达时一次请求能挂十几分钟，
+# 资料清单这类查询接口必须快速失败。
+_probe_http = urllib3.PoolManager(
+    timeout=urllib3.Timeout(connect=2.0, read=8.0),
+    retries=urllib3.Retry(total=0, read=0, connect=0, redirect=0),
+)
+
+# 业务客户端：上传大文件要留足读取时间，但连接和重试要有上限
+_main_http = urllib3.PoolManager(
+    timeout=urllib3.Timeout(connect=5.0, read=300.0),
+    retries=urllib3.Retry(total=2, read=0, connect=0, status=0, redirect=0, backoff_factor=0.3),
+)
 
 _PUBLIC_READ_POLICY = {
     "Version": "2012-10-17",
@@ -53,6 +68,7 @@ def get_minio_client() -> Minio:
             access_key=minio_config.access_key,
             secret_key=minio_config.secret_key,
             secure=minio_config.secure,
+            http_client=_main_http,
         )
 
         if not client.bucket_exists(minio_config.bucket_name):
@@ -67,6 +83,22 @@ def get_minio_client() -> Minio:
         _minio_client = client
         logger.info("MinIO 连接成功：%s/%s", minio_config.endpoint, minio_config.bucket_name)
         return _minio_client
+
+
+def get_minio_probe_client() -> Minio:
+    """只读探测用的客户端：短超时、不重试，用来列资料清单。
+
+    和 get_minio_client() 的区别：
+    - 不做建桶 / 设策略这类写操作（页面加载时就跑，不能有副作用）；
+    - 中间件挂掉时几秒内就返回错误，而不是把请求拖住几分钟。
+    """
+    return Minio(
+        endpoint=minio_config.endpoint,
+        access_key=minio_config.access_key,
+        secret_key=minio_config.secret_key,
+        secure=minio_config.secure,
+        http_client=_probe_http,
+    )
 
 
 def build_public_url(object_name: str) -> str:

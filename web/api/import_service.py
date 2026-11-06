@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, UploadFile, File
 from config.env_loader import env_str
 from config.minio_config import minio_config
 from processor.import_processor.main_graph import KBImportWorkflow
+from utils import doc_registry
 from utils.minio_utils import get_minio_client
 from utils.task_utils import (
     add_done_task,
@@ -57,11 +58,13 @@ def run_graph_task(task_id: str, file_dir: str, import_file_path: str):
 
         # 4. 全流程执行完成，更新任务全局状态为：已完成
         update_task_status(task_id, "completed")
+        doc_registry.mark(task_id, "ready")
     except Exception as e:
         # 5. 捕获全流程异常，更新任务全局状态为：失败，并记录错误日志（含堆栈）
         logger.exception("[%s] 导入流程失败：%s", task_id, e)
         set_task_result(task_id, "error", str(e))
         update_task_status(task_id, "failed")
+        doc_registry.mark(task_id, "failed")
 
 # 5. 核心接口：文件上传接口
 # 支持多文件上传，核心流程：接收文件 → 本地保存 → MinIO上传 → 启动后台任务
@@ -109,6 +112,12 @@ async def upload_files(background_tasks: BackgroundTasks, files: List[UploadFile
             shutil.copyfileobj(file.file, file_buffer)
             #`shutil.copyfileobj(源流, 目标流)`把源流的数据，原样拷贝到目标文件流，适合大文件，不会一次性全读到内存。
         print(f"[{task_id}] 文件已保存至本地，路径：{import_file_path}")
+
+        # 登记到内存清单：前端 /documents 立刻能看到「解析中」，不必等 MinIO 落库
+        try:
+            doc_registry.register(task_id, file.filename, os.path.getsize(import_file_path))
+        except OSError as exc:
+            logger.warning("[%s] 登记资料清单失败：%s", task_id, exc)
 
         # 6. 将本地文件上传至MinIO对象存储，做持久化保存
         # 构建MinIO中的文件对象名：pdf_files/YYYYMMDD/文件名（按日期分层，和本地一致）

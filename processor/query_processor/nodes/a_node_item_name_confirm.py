@@ -221,6 +221,17 @@ class NodeItemNameConfirm(NodeBase):
 
     def _step_8_write_history(self, state, session_id, rewritten_query, message_id):
         print("step_8: 写入历史会话，更新")
+        # 先落用户消息、再落澄清回复：save_chat_message 每次都重取 ts，
+        # 顺序反了会让历史里「回复」排在「提问」前面。
+        save_chat_message(
+            session_id=session_id,
+            role="user",
+            text=state.get("original_query"),
+            rewritten_query=rewritten_query,
+            item_names=state.get("item_names", []),
+            message_id=message_id,
+        )
+
         # 只有本节点直接给出答案（澄清/未找到）时才写 assistant 记录；
         # 正常问答的答案由 g_node_answer_output 统一写入，避免重复
         if state.get("answer"):
@@ -231,15 +242,6 @@ class NodeItemNameConfirm(NodeBase):
                 rewritten_query="",
                 item_names=state.get("item_names", []),
             )
-
-        save_chat_message(
-            session_id=session_id,
-            role="user",
-            text=state.get("original_query"),
-            rewritten_query=rewritten_query,
-            item_names=state.get("item_names", []),
-            message_id=message_id,
-        )
 
 
 if __name__ == '__main__':

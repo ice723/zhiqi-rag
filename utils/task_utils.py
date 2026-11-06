@@ -36,16 +36,16 @@ _NODE_NAME_TO_CN: Dict[str, str] = {
     "g_node_import_milvus": "导入向量库",
     "__end__": "处理完成",
     "END": "处理完成",
-    # --- Query 流程节点（kb/query_process/main_graph.py）---
-    "a_node_item_name_confirm": "确认问题产品",
-    "g_node_answer_output": "生成答案",
-    "f_node_rerank": "重排序",
-    "e_node_rrf": "倒排融合",
-    "d_node_web_search_mcp": "网络搜索",
-    "b_node_search_embedding": "切片搜索",
-    "c_node_search_embedding_hyde": "切片搜索(假设性文档)",
-    "node_multi_search": "多路搜索",
-    "node_join": "多路搜索合并",
+    # --- Query 流程节点（processor/query_processor/main_graph.py）---
+    "a_node_item_name_confirm": "理解问题",
+    "g_node_answer_output": "生成回答",
+    "f_node_rerank": "结果重排",
+    "e_node_rrf": "结果融合",
+    "d_node_web_search_mcp": "联网搜索",
+    "b_node_search_embedding": "知识库检索",
+    "c_node_search_embedding_hyde": "假设性检索",
+    "node_multi_search": "多路检索",
+    "node_join": "合并结果",
 }
 
 
@@ -175,6 +175,8 @@ def task_push_queue(task_id: str):
         "status": get_task_status(task_id),
         "done_list": get_done_task_list(task_id),
         "running_list": get_running_task_list(task_id),
+        # 失败时把原因一并推送，前端才能显示具体错误，而不是只有「处理失败」
+        "error": get_task_result(task_id, "error", ""),
     })
 
 

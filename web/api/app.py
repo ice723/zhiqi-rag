@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from config.env_loader import env_str
+from web.api.document_service import router as document_router
 from web.api.import_service import router as import_router
 from web.api.query_service import router as query_router
 
@@ -66,6 +67,7 @@ app.add_middleware(
 
 app.include_router(import_router)
 app.include_router(query_router)
+app.include_router(document_router)
 
 
 @app.get("/", include_in_schema=False)
@@ -102,11 +104,15 @@ async def health() -> dict:
 
 
 @app.get("/health/deep", summary="依赖健康检查")
-async def health_deep() -> dict:
-    """逐项检查 Milvus / MongoDB / MinIO，任何一项失败不影响接口本身返回。"""
+def health_deep() -> dict:
+    """逐项检查 Milvus / MongoDB / MinIO，任何一项失败不影响接口本身返回。
+
+    这里调用的是同步客户端，必须写成普通 def，由 FastAPI 丢到线程池执行。
+    写成 async def 会在事件循环里发起阻塞连接，中间件不可达时会整站卡死。
+    """
     from config.milvus_config import milvus_config
     from utils.milvus_utils import get_milvus_client
-    from utils.minio_utils import get_minio_client
+    from utils.minio_utils import get_minio_probe_client
     from utils.mongo_history_utils import get_history_mongo_tool
 
     result = {}
@@ -126,7 +132,7 @@ async def health_deep() -> dict:
     try:
         from config.minio_config import minio_config
 
-        client = get_minio_client()
+        client = get_minio_probe_client()
         result["minio"] = "ok" if client.bucket_exists(minio_config.bucket_name) else "bucket_missing"
     except Exception as exc:  # noqa: BLE001
         result["minio"] = f"error: {exc}"

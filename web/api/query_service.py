@@ -9,9 +9,10 @@ from starlette.responses import StreamingResponse
 
 from processor.query_processor.main_graph import KBQueryWorkflow
 from utils.mongo_history_utils import clear_history, get_history_messages
-from utils.sse_utils import create_sse_queue, sse_generator
+from utils.sse_utils import SSEEvent, create_sse_queue, push_to_session, sse_generator
 from utils.task_utils import (
     TASK_STATUS_PROCESSING,
+    clear_task,
     get_done_task_list,
     get_task_result,
     update_task_status,
@@ -39,6 +40,11 @@ async def query(background: BackgroundTasks, query: QueryRequest):
 
     if is_stream:
         create_sse_queue(session_id)
+
+    # 同一个 session 会被连续追问：先清掉上一轮遗留的节点进度和答案，
+    # 否则新一轮的第一个 progress 事件仍带着旧问题的「已完成」节点，
+    # 前端会把上一轮的步骤错记到这一轮上。
+    clear_task(session_id)
 
     update_task_status(session_id, TASK_STATUS_PROCESSING, is_stream)
 
@@ -75,6 +81,11 @@ def run_query_graph(session_id: str, user_query: str, is_stream: bool):
 
         set_task_result(session_id, "error", str(exc))
         update_task_status(session_id, TASK_STATUS_FAILED, is_stream)
+    finally:
+        if is_stream:
+            # 流程结束后主动关闭 SSE：否则生成器一直阻塞在队列上，
+            # 连接要等浏览器 es.close() 才断开，服务端队列也会一直挂着。
+            push_to_session(session_id, SSEEvent.CLOSE, {})
 
 
 @router.get("/stream/{session_id}", summary="SSE 流式输出")
@@ -91,13 +102,24 @@ async def stream(session_id: str, request: Request):
 
 
 @router.get("/history/{session_id}", summary="获取会话历史")
-async def history(session_id: str, limit: int = 50):
-    return {"session_id": session_id, "items": get_history_messages(session_id, limit=limit)}
+def history(session_id: str, limit: int = 50):
+    # Mongo 是同步客户端，用普通 def 交给线程池，别堵事件循环
+    try:
+        items = get_history_messages(session_id, limit=limit)
+    except Exception as exc:  # noqa: BLE001
+        # 历史服务不可用时页面仍要能打开：返回空列表 + 原因，前端不弹错
+        logger.warning("读取会话历史失败：%s", exc)
+        return {"session_id": session_id, "items": [], "error": str(exc)}
+    return {"session_id": session_id, "items": items}
 
 
 @router.delete("/history/{session_id}", summary="清空会话历史")
-async def delete_history(session_id: str) -> dict:
-    deleted = clear_history(session_id)
+def delete_history(session_id: str) -> dict:
+    try:
+        deleted = clear_history(session_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("清空会话历史失败：%s", exc)
+        return {"session_id": session_id, "deleted": 0, "error": str(exc)}
     return {"session_id": session_id, "deleted": deleted}
 
 
