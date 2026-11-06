@@ -1,198 +1,128 @@
-# knowledge_base_0709
+# Zhiqi · RAG knowledge base over your own documents
 
-#### Description
-knowledge_base:知器
+Upload PDFs / Markdown, ask questions in natural language, and get answers grounded in your own material through hybrid retrieval.
 
-"""
-    清华镜像
-"""
-conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
-conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+Live demo: **<https://rag.gcmg.cn>**
 
-"""
-    删除镜像
-"""
-conda config --remove-key channels
+Zhiqi is the **CPU-only edition** of `knowlege_base311`. No local LLM is loaded: embedding, reranking and generation all go through the SiliconFlow API, so the full stack (Milvus 2.5 + MinIO + MongoDB + single-process FastAPI) runs on a modest 2 vCPU / 4 GB cloud server.
 
-"""
-    查看镜像
-"""
-conda config --set show_channel_urls yes
-conda config --show channels
+## What it does
 
+- **One pipeline for ingestion**: PDF → Markdown (MinerU) → images to MinIO → semantic chunking → entity (product name) recognition → bge-m3 embedding → Milvus
+- **Hybrid retrieval**: dense vectors plus server-side BM25 with a Chinese analyzer in Milvus 2.5 — no local GPU required
+- **Three-way recall + RRF + rerank**: vector search, HyDE, and web search run in parallel, fused by RRF, reranked by a Cross-Encoder, then answered by the LLM
+- **Entity alignment**: before searching, the query graph decides *which product* is being asked about, with dual thresholds (≥0.8 confirmed / 0.6–0.8 ask back / <0.6 refuse). Answers can carry the matching figures from the source document
+- **SSE streaming**: node-level progress (entity → KB search → web search → HyDE → RRF → rerank → answer) plus token-by-token output
+- **Degrades instead of blanking**: with middleware down the page still loads, document list and history return empty with a reason, and a failed generation ends in one readable sentence rather than a spinner
+- **MinIO is the source of truth for the document list**: switching browsers or restarting the service keeps the sidebar in sync with the actual knowledge base
 
-"""
-    工程环境
-"""
-conda create -n py311 python=3.11
-conda activate py311
-python -m venv kb311
-.\Scripts\activate
+## Architecture
 
+```text
+web/page/index.html        single-page UI (import drawer + chat + library, dependency-free vanilla JS)
+        │  /upload /status /query /stream /documents /history
+web/api/app.py             unified FastAPI (single process; SSE queues and task progress live in memory)
+        │
+processor/                 two LangGraph workflows
+  ├─ import_processor/     entry → PDF→MD → images → split → entity → embed → import
+  └─ query_processor/      entity confirm → vector / HyDE / web recall → RRF → rerank → answer
+        │
+utils/inference/           inference abstraction: siliconflow (default) | local_gpu
+        │
+SiliconFlow API / self-hosted GPU HTTP service
+```
 
-"""
-    mineru
-"""
-官方：https://opendatalab.github.io/MinerU/zh/
-官方：https://mineru.net/apiManage/docs
-pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple
-pip install uv -i https://mirrors.aliyun.com/pypi/simple
-uv pip install -U "mineru[all]" -i https://mirrors.aliyun.com/pypi/simple
-测试： mineru --version
+The backend is selected by `INFERENCE_BACKEND`; business code is unaware of the implementation:
 
-"""
-    mineru模型
-"""
-模型缓存：$env:MODELSCOPE_CACHE="D:\ai_models\modelscope_cache"
-下模型：mineru-models-download
-桌面客户端：https://mineru.net/
-测试：mineru -p xxx.pdf -o output --backend pipeline
+| Backend | Embedding | Rerank | LLM |
+|---|---|---|---|
+| `siliconflow` (default, CPU server) | `BAAI/bge-m3` | `BAAI/bge-reranker-v2-m3` | `Qwen/Qwen3-8B` |
+| `local_gpu` | `BGE_M3_URL` | `BGE_RERANKER_URL` | `LLM_API_BASE` |
 
-"""
-    milvus
-"""
-pip uninstall -y pymilvus milvus-model FlagEmbedding
-uv add pymilvus[model] transformers FlagEmbedding
-pip install "pymilvus[model]" transformers FlagEmbedding
+## Retrieval evaluation
 
-"""
-    安装BGE-M3
-"""
-uv add pymilvus[model] transformers FlagEmbedding
-pip install "pymilvus[model]" transformers FlagEmbedding
-pip install modelscope
-执行脚本：python download_bgem3.py
-"""
-    from modelscope.hub.snapshot_download import snapshot_download
-    # 下载模型到当前目录下的 models/bge-m3 文件夹
-    model_dir = snapshot_download('BAAI/bge-m3', cache_dir='D:/ai_models/modelscope_cache/models')
-    print(f"模型已下载到: {model_dir}")
-"""
-测试：python -c "import torch; print('CUDA可用:', torch.cuda.is_available())"
-万一测试不可用：pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 (仅限于5090)
+Details in **[eval/README.md](eval/README.md)** (12 device manuals / 276 chunks / 16 questions, ablations and entity alignment):
 
-"""
-    pytorch
-"""
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-删除旧版本：pip uninstall torch torchvision torchaudio -y
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 (5090)
-cuda开发工具：https://developer.nvidia.com/cuda-12-4-0-download-archive
-检查pytorch状态：python -c "import torch; print('CUDA Available:', torch.cuda.is_available())"
-"""
-    环境中安装了 TensorFlow
-    transformers 库的 TensorFlow 后端模块不支持 Keras 3
-    BGE-M3 是 PyTorch 模型、推理完全不需要 TensorFlow，
-    但 transformers 导入时会自动探测环境中的所有深度学习后端，
-    可能触发 TensorFlow 模块的加载，从而抛出错误
-"""
-冲突解决1：pip install tf-keras
-冲突解决2：pip uninstall tensorflow keras tf-keras -y
+| Configuration | Online path (entity filter) | Full-corpus stress (no filter) |
+|---|---|---|
+| C1 dense + sparse hybrid | 100% | 100% |
+| C2 + HyDE / RRF | 100% | 94% |
+| C3 + Cross-Encoder rerank (full chain) | **100%** | **81%** |
 
-测试：
-import torch
-print(torch.cuda.is_available())  # 如果输出 True，说明成功认出显卡！
-print(torch.version.cuda)         # 这会显示你安装的 PyTorch 自带的 CUDA 版本（比如 12.1）
+- The entity filter matters most: removing it drops the full chain from 100% to 81% on four manuals with near-identical chapters — **metadata filtering beats reranking here**
+- HyDE is a negative trade in this corpus (-6% in stress mode). It is kept for robustness against single-path variance and is the main latency cost (about +11 s)
+- Baseline retrieval ≈ 284 ms, rerank ≈ 148 ms (measured on the `local_gpu` backend)
 
+## Quick start
 
-"""
-    fastapi
-"""
-pip install fastapi
-pip install "uvicorn[standard]"
+```bash
+# 1. Configuration (keys live in the env file only)
+cp .env.example .env
+vi .env
 
+# 2. Dependencies (Python 3.11)
+uv pip install -e .                 # recommended; or: pip install -r deploy/requirements.txt
 
+# 3. Smoke-test the inference path
+python scripts/smoke_inference.py --all
 
-"""
-    若安装minio会报错，升级版本
-"""
-python -m pip install --upgrade pip
+# 4. Run (single process — SSE relies on in-process state)
+python -m web.api.app
+```
 
+Open <http://127.0.0.1:8000/>. Milvus / MongoDB / MinIO addresses come from `.env`; use the four services in `deploy/docker-compose.yml` if you only need the middleware.
 
-knowledge/
-├── api/                              # API 路由层
-│   ├── query_router.py              # 查询服务路由 (port 8001)
-│   │   ├── POST /query              # 发起查询
-│   │   ├── GET /stream/{session_id} # SSE 流式获取
-│   │   ├── GET /history/{session_id}# 获取历史
-│   │   └── DELETE /history/...      # 清除历史
-│   └── import_router.py             # 导入服务路由 (port 8000)
-│       ├── POST /upload             # 上传文件
-│       └── GET /status/{task_id}    # 查询任务状态
-│
-├── core/                             # 核心配置
-│   ├── deps.py                      # 依赖注入（单例管理）
-│   └── paths.py                     # 路径常量配置
-│
-├── processor/                        # 业务处理流程（LangGraph）
-│   ├── import_processor/               # 导入流程
-│   │   ├── base.py           		 # 导入节点基类
-│   │   ├── config.py           	  # 导入流程配置管理
-│   │   ├── exceptions.py             # 导入流程自定义异常
-│   │   ├── main_graph.py           # 导入流程图定义
-│   │   ├── state.py                # 状态类型定义
-│   │   └── nodes/                  # 处理节点
-│   │       ├── node_entry.py            # 入口节点
-│   │       ├── node_pdf_to_md.py        # PDF 转 MD
-│   │       ├── node_md_img.py           # 图片处理
-│   │       ├── node_document_split.py   # 文档切分
-│   │       ├── node_item_name_recognition.py  # 商品识别
-│   │       ├── node_bge_embedding.py    # 向量嵌入
-│   │       └── node_import_milvus.py    # Milvus 存储
-│   │
-│   └── query_processor/              	# 查询流程
-│       ├── base.py           		    # 查询节点基类
-│       ├── config.py           	    # 查询流程配置管理
-│       ├── exceptions.py               # 查询流程自定义异常
-│       ├── main_graph.py           	# 查询流程图定义
-│       ├── state.py                	# 状态类型定义
-│       ├── prompt.py               	# 提示词模板
-│       └── nodes/                  	# 处理节点
-│           ├── node_item_name_confirm.py    # 商品确认
-│           ├── node_vector_search.py        # 向量检索
-│           ├── node_hyde_search.py          # HyDE 检索
-│           ├── node_web_search_mcp.py       # Web 搜索
-│           ├── node_rrf.py                  # RRF 融合
-│           ├── node_rerank.py               # 重排序
-│           └── node_answer_output.py        # 答案生成
-│
-├── schema/                          # 数据模型定义
-│   ├── query_schema.py              # 查询请求/响应模型
-│   ├── upload_schema.py             # 上传响应模型
-│   └── task_schema.py               # 任务状态模型
-│
-├── services/                        # 业务服务层
-│   ├── file_import_service.py       # 文件导入服务
-│   └── task_service.py              # 任务管理服务
-│
-├── utils/                           # 工具函数库
-│   ├── milvus_utils.py              # Milvus 向量库操作
-│   ├── embedding_utils.py           # 向量嵌入工具
-│   ├── llm_utils.py                 # LLM 客户端封装
-│   ├── reranker_utils.py            # Reranker 模型
-│   ├── mongo_history_utils.py       # MongoDB 历史记录
-│   ├── sse_utils.py                 # SSE 流式推送
-│   ├── task_utils.py                # 任务状态管理
-│   └── minio_utils.py               # MinIO 对象存储
-│
-├── front/                           # 前端页面
-│   ├── chat.html                    # 聊天界面
-│   └── import.html                  # 导入界面
-│
-├── test/                             # 测试代码
-├── docs/                             # 文档目录
-├── temp_data/                        # 临时数据目录
-├── .env                              # 环境配置文件
-├── .env.example                      # 环境配置文件模板
-├── pyproject.toml                    # Python 依赖声明
-└── uv.locl							# uv版本锁定文件
+## API
 
-"""
-    笔记
-"""
-扫描后的图片：List[Tuple[str,str,Tuple[str,str]]]
-扫描后的图片：list[(图片名，图片路径,(图片上文，图片下文))]
+| Method | Path | Description |
+|---|---|---|
+| POST | `/upload` | Upload one or more files, returns `task_ids`; ingestion runs in the background |
+| GET | `/status/{task_id}` | Import progress (`done_list` / `running_list` / `status` / `error`) |
+| GET | `/documents` | Library listing (MinIO as source of truth, merged with in-flight states) |
+| POST | `/query` | Ask a question (with `is_stream=true` events go to `/stream/{session_id}`) |
+| GET | `/stream/{session_id}` | SSE: `ready` / `progress` / `delta` / `final` / `error` |
+| GET / DELETE | `/history/{session_id}` | Chat history / clear |
+| GET | `/health`, `/health/deep` | Service and dependency (Milvus, Mongo, MinIO) checks |
+
+## Configuration notes
+
+See `.env.example` for the full list. The usual traps:
+
+- `SILICONFLOW_API_KEY`: required, never commit it
+- `EMBEDDING_DIM=1024`: must match bge-m3; changing it breaks existing collections
+- `CHUNKS_COLLECTION=kb_chunks_v2`, `ITEM_NAME_COLLECTION=kb_item_names_v2`: the BM25 schema is incompatible with older collections, hence the new names; collections are created on first import
+- `MINIO_PUBLIC_BASE_URL`: public prefix for figures in answers (e.g. `https://your-domain/minio` when reverse-proxied)
+- `MINERU_API_TOKEN` / `MINERU_BASE_URL`: MinerU cloud API for PDF parsing (Markdown uploads skip it)
+- `WEB_SEARCH_ENABLED`: toggles the web-search branch of the query graph
+
+## Deployment
+
+Full-stack Docker Compose, Nginx (SSE must disable buffering), security groups, image mirrors and troubleshooting: see **[CPU_DEPLOY.md](CPU_DEPLOY.md)**.
+
+Two hard-won notes:
+
+- The app must run single-process (`--workers 1`); multiple workers break the in-memory SSE queues and task progress
+- The index response must carry `Cache-Control: no-cache`, otherwise mobile browsers keep serving a stale page
+
+## Layout
+
+```text
+config/      configuration (env_loader reads the project-root .env)
+processor/   import_processor (ingest graph) + query_processor (query graph)
+utils/       inference clients, Milvus, MinIO, Mongo, SSE, task progress, document registry
+web/         api/ (FastAPI routers) + page/ (single-page UI)
+deploy/      Dockerfile, docker-compose, env template, Nginx, start/stop scripts
+scripts/     inference smoke test and ops helpers
+eval/        retrieval evaluation (questions, script, results, findings)
+test/        ad-hoc integration scripts
+```
+
+## Known limitations (design trade-offs)
+
+- **The question must map to a known entity**: the query graph confirms which product/device is being asked about and filters chunks by it. Questions with no such entity ("what's the weather") are refused, and documents recognized under different entity names will not be retrieved together
+- With a tiny demo corpus, short documents become a single chunk, so retrieval granularity is coarse
+- HyDE dominates latency; the roadmap is a smaller generator, a length cap on the hypothetical document, or enabling it only for paraphrased questions
+
+## About
+
+A personal portfolio project, built on top of `knowlege_base311` (the GPU + local BGE edition). The original project is left untouched; all changes live in this directory.

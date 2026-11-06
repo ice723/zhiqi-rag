@@ -70,14 +70,19 @@ app.include_router(query_router)
 app.include_router(document_router)
 
 
+# 单页应用每次都要回源校验：没有 Cache-Control 时浏览器会按启发式缓存 HTML，
+# 发版后手机端可能长期停留在旧页面。带 ETag 的 no-cache 仍然走 304，不浪费带宽。
+PAGE_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
+
+
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
-    return FileResponse(PAGE_DIR / "index.html")
+    return FileResponse(PAGE_DIR / "index.html", headers=PAGE_HEADERS)
 
 
 @app.get("/index.html", include_in_schema=False)
 async def index_alias() -> FileResponse:
-    return FileResponse(PAGE_DIR / "index.html")
+    return FileResponse(PAGE_DIR / "index.html", headers=PAGE_HEADERS)
 
 
 @app.get("/import/html", include_in_schema=False)

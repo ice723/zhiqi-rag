@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,18 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _history_mongo_tool: Optional["HistoryMongoTool"] = None
+
+
+_CRED_RE = re.compile(r"^([a-zA-Z][\w+.\-]*://)[^/@]*@")
+
+
+def _mask_url(url: str) -> str:
+    """去掉 URL 里的账号密码，日志里只留下主机和库名。
+
+    用正则而不是 urlsplit：Mongo 支持多主机串
+    （`mongodb://u:p@h1:27017,h2:27017/db`），urlsplit 解析不了这种写法。
+    """
+    return _CRED_RE.sub(r"\1", url)
 
 
 class HistoryMongoTool:
@@ -38,7 +51,7 @@ class HistoryMongoTool:
         self.chat_message = self.db["chat_message"]
         self.chat_message.create_index([("session_id", 1), ("ts", -1)])
 
-        logger.info("MongoDB 连接成功：%s/%s", self.mongo_url, self.db_name)
+        logger.info("MongoDB 连接成功：%s/%s", _mask_url(self.mongo_url), self.db_name)
 
 
 def get_history_mongo_tool() -> HistoryMongoTool:
