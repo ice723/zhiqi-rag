@@ -1,8 +1,10 @@
 from datetime import datetime
 import logging
 import os
+import re
 import shutil
 import uuid
+from email.header import decode_header, make_header
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, BackgroundTasks, UploadFile, File
@@ -27,6 +29,43 @@ logger = logging.getLogger(__name__)
 
 # 导入相关接口挂到统一服务上（web/api/app.py 负责创建 FastAPI 实例和跨域）
 router = APIRouter(tags=["import"])
+
+# Windows 不允许出现在文件名里的字符，外加控制字符
+_UNSAFE_FILENAME_CHARS = re.compile(r'[\x00-\x1f\x7f<>:"/\\|?*]')
+_MAX_FILENAME_LEN = 120
+
+
+def _decode_rfc2047(value: str) -> str:
+    """还原 RFC2047 编码的文件名（部分 .NET / Java 客户端会这样发中文名）。"""
+    if not value or "=?" not in value:
+        return value
+    try:
+        return str(make_header(decode_header(value)))
+    except Exception:  # noqa: BLE001
+        return value
+
+
+def _safe_filename(raw_name: str) -> str:
+    """把客户端给的文件名收敛成可以安全落盘的名字。
+
+    1. 解开 RFC2047 编码，拿到真实文件名；
+    2. 只取最后一段，挡住 `../../x.pdf` 这类路径穿越；
+    3. 去掉 Windows 非法字符，避免 open() 直接抛 OSError；
+    4. 空名或过长时兜底，保证能落盘。
+    """
+    name = _decode_rfc2047(raw_name or "").replace("\\", "/")
+    name = name.rsplit("/", 1)[-1]
+    name = _UNSAFE_FILENAME_CHARS.sub("_", name).strip().strip(".")
+    if not name:
+        return f"upload-{uuid.uuid4().hex[:8]}"
+    if len(name) > _MAX_FILENAME_LEN:
+        _, dot, ext = name.rpartition(".")
+        if dot and len(ext) <= 10:
+            name = name[: _MAX_FILENAME_LEN - len(ext) - 1] + "." + ext
+        else:
+            name = name[:_MAX_FILENAME_LEN]
+    return name
+
 
 #4.后台任务langgraph的工作流
 # 独立于主请求线程，由BackgroundTasks触发，避免阻塞接口响应
@@ -97,7 +136,9 @@ async def upload_files(background_tasks: BackgroundTasks, files: List[UploadFile
         #生成全局唯一TaskID（使用uuid的UUID4()这个方法），作为单个文件的全流程标识
         task_id = str(uuid.uuid4())
         task_ids.append(task_id)
-        print(f"[{task_id}] 开始处理上传文件，文件名：{file.filename}，文件类型：{file.content_type}")
+        # 客户端给的文件名不可信：可能带路径、可能是 RFC2047 编码、可能含非法字符
+        file_name = _safe_filename(file.filename)
+        print(f"[{task_id}] 开始处理上传文件，文件名：{file_name}（原始：{file.filename}），文件类型：{file.content_type}")
         # 3. 标记「文件上传」阶段为「运行中」，前端轮询可查
         add_running_task(task_id, "upload_file")
 
@@ -105,7 +146,7 @@ async def upload_files(background_tasks: BackgroundTasks, files: List[UploadFile
         file_dir = os.path.join(data_dir, task_id)
         os.makedirs(file_dir, exist_ok=True)  # 目录不存在则创建，存在则不做处理
         # 构建上传文件的本地保存绝对路径
-        import_file_path = os.path.join(file_dir, file.filename)
+        import_file_path = os.path.join(file_dir, file_name)
 
         # 5. 将上传的文件保存到本地临时目录（后续MinIO上传/文件解析均基于此文件）
         with open(import_file_path, "wb") as file_buffer:
@@ -115,13 +156,13 @@ async def upload_files(background_tasks: BackgroundTasks, files: List[UploadFile
 
         # 登记到内存清单：前端 /documents 立刻能看到「解析中」，不必等 MinIO 落库
         try:
-            doc_registry.register(task_id, file.filename, os.path.getsize(import_file_path))
+            doc_registry.register(task_id, file_name, os.path.getsize(import_file_path))
         except OSError as exc:
             logger.warning("[%s] 登记资料清单失败：%s", task_id, exc)
 
         # 6. 将本地文件上传至MinIO对象存储，做持久化保存
         # 构建MinIO中的文件对象名：pdf_files/YYYYMMDD/文件名（按日期分层，和本地一致）
-        minio_object_name = f"pdf_files/{datetime.now().strftime('%Y%m%d')}/{file.filename}"
+        minio_object_name = f"pdf_files/{datetime.now().strftime('%Y%m%d')}/{file_name}"
         try:
             # 获取MinIO客户端实例
             minio_client = get_minio_client()
