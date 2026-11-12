@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _minio_client: Optional[Minio] = None
+_probe_client: Optional[Minio] = None
+_probe_lock = threading.Lock()
 
 # 只读探测用：连接 2s、读取 8s、不重试。
 # urllib3 默认 connect timeout 是 300s，中间件不可达时一次请求能挂十几分钟，
@@ -92,13 +94,22 @@ def get_minio_probe_client() -> Minio:
     - 不做建桶 / 设策略这类写操作（页面加载时就跑，不能有副作用）；
     - 中间件挂掉时几秒内就返回错误，而不是把请求拖住几分钟。
     """
-    return Minio(
-        endpoint=minio_config.endpoint,
-        access_key=minio_config.access_key,
-        secret_key=minio_config.secret_key,
-        secure=minio_config.secure,
-        http_client=_probe_http,
-    )
+    global _probe_client
+    if _probe_client is not None:
+        return _probe_client
+
+    # 用独立的锁：get_minio_client 持锁期间会做建桶等网络操作，
+    # 资料清单不该排在它后面等。
+    with _probe_lock:
+        if _probe_client is None:
+            _probe_client = Minio(
+                endpoint=minio_config.endpoint,
+                access_key=minio_config.access_key,
+                secret_key=minio_config.secret_key,
+                secure=minio_config.secure,
+                http_client=_probe_http,
+            )
+    return _probe_client
 
 
 def build_public_url(object_name: str) -> str:

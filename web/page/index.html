@@ -1516,6 +1516,21 @@
       const d = new Date();
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
+    // 服务端给 epoch 秒，按浏览器本地时区渲染；旧缓存条目回退到 time/date 字符串
+    function docWhen(d){
+      const ts = Number(d.ts);
+      if(ts > 0){
+        const at = new Date(ts * 1000);
+        const pad = n => String(n).padStart(2, '0');
+        const hhmm = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+        const ymd = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+        // 非今天导入的文件带上日期，不然只有时分看不出是哪天的
+        return ymd === todayKey() ? hhmm : `${ymd.slice(5)} ${hhmm}`;
+      }
+      return d.date && d.date !== todayKey()
+        ? d.date.slice(5) + ' ' + (d.time || '')
+        : (d.time || '');
+    }
     function renderDocs(){
       const docs = loadDocs();
       const listEl = document.getElementById('docList');
@@ -1530,12 +1545,8 @@
         return;
       }
       emptyEl.hidden = true;
-      const today = todayKey();
       listEl.innerHTML = docs.map(d => {
-        // 非今天导入的文件带上日期，不然只有时分看不出是哪天的
-        const when = d.date && d.date !== today
-          ? d.date.slice(5) + ' ' + (d.time || '')
-          : (d.time || '');
+        const when = docWhen(d);
         const state = d.status === 'parsing' ? ' · 解析中' : (d.status === 'failed' ? ' · 失败' : '');
         return `
         <li class="doc" data-status="${escapeHtml(d.status || 'ready')}" title="${escapeHtml(d.name)}">
@@ -1555,6 +1566,8 @@
           name: f.name,
           size: f.size,
           time: nowTime(),
+          date: todayKey(),
+          ts: Date.now() / 1000,
           status: taskIds[i] ? 'parsing' : 'failed'
         });
       });
@@ -1575,8 +1588,9 @@
 
     // 以服务端 MinIO 清单为准刷新资料库；拉取失败时继续用本地缓存
     let docsSyncing = false;
+    let docsResync = false;   // 同步期间又来了请求：结束后补跑一次，别丢掉最后一次状态
     async function syncDocs(){
-      if(docsSyncing) return;
+      if(docsSyncing){ docsResync = true; return; }
       docsSyncing = true;
       try{
         const res = await fetch(`${API_BASE}/documents`);
@@ -1591,6 +1605,7 @@
             size: d.size || 0,
             time: d.time || '',
             date: d.date || '',
+            ts: Number(d.ts) || 0,
             status: d.status || 'ready'
           }));
         // 刚上传、服务端清单里还没有的文件继续显示「解析中」，别让条目闪没
@@ -1604,7 +1619,10 @@
         docsError = 'offline';
         renderDocs();
       }
-      finally{ docsSyncing = false; }
+      finally{
+        docsSyncing = false;
+        if(docsResync){ docsResync = false; syncDocs(); }
+      }
     }
 
     /* ============================================================

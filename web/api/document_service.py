@@ -16,9 +16,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query, Response
+from pydantic import BaseModel
 
 from config.minio_config import minio_config
 from utils import doc_registry
@@ -30,12 +31,35 @@ router = APIRouter(tags=["documents"])
 
 PREFIX = "pdf_files/"
 DEFAULT_LIMIT = 60
+MAX_LIMIT = 200
+
+
+class DocumentItem(BaseModel):
+    """单条资料。"""
+
+    id: str
+    name: str
+    size: int = 0
+    time: str = ""
+    date: str = ""
+    ts: float = 0
+    status: Literal["parsing", "ready", "failed"] = "ready"
+    source: Literal["minio", "upload"] = "minio"
+
+
+class DocumentList(BaseModel):
+    """资料库清单响应。"""
+
+    items: List[DocumentItem]
+    error: str = ""
 
 
 def _local_time(value: Any) -> datetime:
     """把 MinIO 的 last_modified 统一成本地时区的 datetime。"""
     if not isinstance(value, datetime):
-        return datetime.now()
+        # 少数 S3 兼容实现不返回时间：记一条日志再兜底，别把脏数据伪装成正常
+        logger.warning("MinIO 对象缺少 last_modified：%r", value)
+        return datetime.now(timezone.utc).astimezone()
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone()
@@ -56,9 +80,9 @@ def _minio_items() -> List[Dict[str, Any]]:
                 "size": int(obj.size or 0),
                 "time": local.strftime("%H:%M"),
                 "date": local.strftime("%Y-%m-%d"),
+                "ts": local.timestamp(),
                 "status": "ready",
                 "source": "minio",
-                "_ts": local.timestamp(),
             }
         )
     return items
@@ -86,16 +110,16 @@ def _merge_pending(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             existing["id"] = record.get("id") or existing["id"]
             continue
 
-        local = datetime.fromtimestamp(record.get("time") or 0)
+        local = datetime.fromtimestamp(record.get("time") or 0, tz=timezone.utc).astimezone()
         item = {
             "id": record.get("id") or name,
             "name": name,
             "size": int(record.get("size") or 0),
             "time": local.strftime("%H:%M"),
             "date": local.strftime("%Y-%m-%d"),
+            "ts": local.timestamp(),
             "status": status,
             "source": "upload",
-            "_ts": local.timestamp(),
         }
         items.append(item)
         by_name[name] = item
@@ -103,26 +127,40 @@ def _merge_pending(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return items
 
 
-@router.get("/documents", summary="资料库清单")
-def list_documents(limit: int = DEFAULT_LIMIT) -> dict:
+def _dedupe(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """同名文件只保留最新一份。
+
+    对象按 `pdf_files/YYYYMMDD/<文件名>` 归档，同一份文件隔天重传会留下多个
+    副本；侧栏按文件名展示，重复会让用户看到两行同样的资料。
+    """
+    newest: Dict[str, Dict[str, Any]] = {}
+    for item in items:
+        current = newest.get(item["name"])
+        if current is None or item["ts"] > current["ts"]:
+            newest[item["name"]] = item
+    return list(newest.values())
+
+
+@router.get("/documents", summary="资料库清单", response_model=DocumentList)
+def list_documents(
+    response: Response,
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+) -> DocumentList:
     """返回知识库里的资料文件（新的在前），供前端侧栏展示。"""
     items: List[Dict[str, Any]] = []
     error = ""
 
     try:
-        items = _minio_items()
+        items = _dedupe(_minio_items())
     except Exception as exc:  # noqa: BLE001
         # MinIO 不可达时仍然返回本次上传记录，前端至少能看到自己刚传的文件
         logger.warning("读取 MinIO 资料清单失败：%s", exc)
-        error = str(exc)
+        # 只给前端稳定的错误码，内部地址/请求 ID 只留在服务端日志里
+        error = "minio_unavailable"
 
     items = _merge_pending(items)
-    items.sort(key=lambda item: item.get("_ts") or 0, reverse=True)
+    items.sort(key=lambda item: item.get("ts") or 0, reverse=True)
 
-    for item in items:
-        item.pop("_ts", None)
-
-    return {
-        "items": items[: max(1, min(int(limit or DEFAULT_LIMIT), 200))],
-        "error": error,
-    }
+    # 清单跟着导入状态变化，不能被浏览器或中间层缓存
+    response.headers["Cache-Control"] = "no-store"
+    return DocumentList(items=items[:limit], error=error)
